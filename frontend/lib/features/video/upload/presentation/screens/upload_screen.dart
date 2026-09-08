@@ -42,6 +42,7 @@ class UploadScreen extends ConsumerStatefulWidget {
 class _UploadScreenState extends ConsumerState<UploadScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _linkController = TextEditingController();
+  final ValueNotifier<List<VideoLink>> _links = ValueNotifier<List<VideoLink>>([]);
   final TextEditingController _tagInputController = TextEditingController();
 
   final ValueNotifier<bool> _showUploadForm = ValueNotifier<bool>(false);
@@ -72,6 +73,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   void dispose() {
     _titleController.dispose();
     _linkController.dispose();
+    _links.dispose();
     _tagInputController.dispose();
     _showUploadForm.dispose();
     _videoAspectRatio.dispose();
@@ -182,6 +184,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       title: _titleController.text,
       description: '',
       link: _linkController.text,
+      links: _links.value,
       thumbnailFile: _selectedThumbnail.value,
       tags: manager.tags,
       platforms: _selectedPlatforms.value,
@@ -875,6 +878,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           MaterialPageRoute(
             builder: (context) => UploadAdvancedSettingsScreen(
               linkController: _linkController,
+              linksNotifier: _links,
               tagInputController: _tagInputController,
               tags: ValueNotifier(ref.read(uploadStateManagerProvider).tags),
               onAddTag: (tag) {

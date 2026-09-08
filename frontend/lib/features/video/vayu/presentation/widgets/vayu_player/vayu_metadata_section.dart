@@ -109,7 +109,7 @@ class VayuMetadataSection extends StatelessWidget {
                   onPressed: onShare,
                   label: 'Share',
                 ),
-                if (video.episodes != null && video.episodes!.isNotEmpty) ...[
+                if (video.episodes != null && video.episodes!.length > 1) ...[
                   SizedBox(width: AppSpacing.spacing2),
                   _buildActionButton(
                     context,
@@ -133,7 +133,7 @@ class VayuMetadataSection extends StatelessWidget {
                   onPressed: onSuggestion,
                   label: 'Suggest',
                 ),
-                if (video.link?.isNotEmpty == true) ...[
+                if (video.hasLink) ...[
                   SizedBox(width: AppSpacing.spacing2),
                   _buildActionButton(
                     context,

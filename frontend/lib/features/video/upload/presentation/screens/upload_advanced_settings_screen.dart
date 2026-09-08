@@ -13,9 +13,12 @@ import 'package:vayug/shared/services/profession_catalog_service.dart';
 import 'package:vayug/shared/utils/app_text.dart';
 import 'package:vayug/shared/widgets/profession_picker_sheet.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+import 'package:vayug/shared/widgets/multi_link_editor_sheet.dart';
 
 class UploadAdvancedSettingsScreen extends StatefulWidget {
   final TextEditingController linkController;
+  final ValueNotifier<List<VideoLink>>? linksNotifier;
   final TextEditingController tagInputController;
   final ValueNotifier<List<String>> tags;
   final void Function(String) onAddTag;
@@ -36,6 +39,7 @@ class UploadAdvancedSettingsScreen extends StatefulWidget {
   const UploadAdvancedSettingsScreen({
     super.key,
     required this.linkController,
+    this.linksNotifier,
     required this.tagInputController,
     required this.tags,
     required this.onAddTag,
@@ -148,11 +152,19 @@ class _UploadAdvancedSettingsScreenState extends State<UploadAdvancedSettingsScr
                       title: 'Promotional Link',
                       subtitle: 'Website or purchase link',
                       trailing: AnimatedBuilder(
-                        animation: widget.linkController,
+                        animation: Listenable.merge([
+                          if (widget.linksNotifier != null) widget.linksNotifier!,
+                          widget.linkController,
+                        ]),
                         builder: (context, _) {
-                          final hasLink = widget.linkController.text.isNotEmpty;
+                          final count = widget.linksNotifier?.value.length ??
+                              (widget.linkController.text.isNotEmpty ? 1 : 0);
+                          final hasLink = count > 0;
+                          final label = count > 1
+                              ? '$count Links'
+                              : (hasLink ? 'Added' : 'None');
                           return Text(
-                            hasLink ? 'Added' : 'None',
+                            label,
                             style: TextStyle(
                               color: !hasLink ? AppColors.textTertiary : AppColors.primary,
                               fontWeight: FontWeight.bold,
@@ -281,38 +293,27 @@ class _UploadAdvancedSettingsScreenState extends State<UploadAdvancedSettingsScr
   }
 
   void _showLinkEditor(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.backgroundPrimary,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          left: 24, right: 24, top: 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Promotional Link', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-            const SizedBox(height: 8),
-            const Text('Add a website or product link to your video details.', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-            const SizedBox(height: 24),
-            TextField(
-              controller: widget.linkController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'https://...',
-                prefixIcon: const Icon(Icons.link),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 24),
-            AppButton(onPressed: () => Navigator.pop(context), label: 'Save Link', variant: AppButtonVariant.primary, isFullWidth: true),
-          ],
-        ),
-      ),
+    final currentLinks = widget.linksNotifier?.value ??
+        (widget.linkController.text.trim().isNotEmpty
+            ? [VideoLink(url: widget.linkController.text.trim())]
+            : <VideoLink>[]);
+
+    MultiLinkEditorSheet.show(
+      context,
+      initialLinks: currentLinks
+          .map((l) => LinkItemData(url: l.url, title: l.title))
+          .toList(),
+      onSave: (saved) {
+        final videoLinks = saved
+            .map((item) => VideoLink(url: item.url, title: item.title))
+            .toList();
+        if (widget.linksNotifier != null) {
+          widget.linksNotifier!.value = videoLinks;
+        }
+        widget.linkController.text =
+            videoLinks.isNotEmpty ? videoLinks.first.url : '';
+        setState(() {});
+      },
     );
   }
 

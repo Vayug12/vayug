@@ -148,6 +148,7 @@ export class AdEngine {
         adType: ad.adType,
         imageUrl: imageUrl,
         link: ad.callToAction?.url || '',
+        links: (ad.links && ad.links.length > 0) ? ad.links : (ad.callToAction?.url ? [{ title: ad.callToAction?.label || '', url: ad.callToAction.url }] : []),
         cloudinaryUrl: ad.cloudinaryUrl || '',
         thumbnail: ad.thumbnail || '',
         title: ad.title || campaign.name || 'Untitled Ad',

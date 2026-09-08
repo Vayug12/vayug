@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vayug/core/providers/auth_providers.dart';
 import 'package:vayug/core/providers/navigation_providers.dart';
 import 'package:vayug/shared/di/dependency_injection.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 
 import 'package:vayug/core/providers/user_data_providers.dart';
 import 'package:video_player/video_player.dart';
@@ -1801,10 +1802,26 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
     }
   }
 
-  /// **HANDLE VISIT NOW: Open link in browser**
+  /// **HANDLE VISIT NOW: Open link in browser or show multiple links sheet**
   Future<void> _handleVisitNow(VideoModel video) async {
-    if (video.link?.isNotEmpty != true) return;
-    await _launchExternalUrl(video.link!);
+    final validLinks = video.validLinks;
+    if (validLinks.length > 1) {
+      LinksBottomSheet.show(
+        context,
+        title: video.videoName,
+        links: validLinks.map((l) => l.toLinkItemData()).toList(),
+        source: 'vayug',
+        medium: 'video_feed',
+        campaign: 'creator_visit',
+      );
+      return;
+    }
+
+    final singleUrl = validLinks.isNotEmpty
+        ? validLinks.first.url
+        : (video.link?.trim() ?? '');
+    if (singleUrl.isEmpty) return;
+    await _launchExternalUrl(singleUrl);
   }
 
   /// **LAUNCH EXTERNAL URL: Helper method for ads and video links**

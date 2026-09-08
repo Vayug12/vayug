@@ -10,6 +10,8 @@ import 'package:vayug/shared/utils/app_logger.dart';
 
 import 'package:vayug/features/video/quiz/presentation/screens/create_quiz_screen.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+import 'package:vayug/shared/widgets/multi_link_editor_sheet.dart';
 
 class EditVideoDetails extends StatefulWidget {
   final VideoModel video;
@@ -22,6 +24,7 @@ class EditVideoDetails extends StatefulWidget {
 class _EditVideoDetailsState extends State<EditVideoDetails> {
   late TextEditingController _titleController;
   late TextEditingController _linkController;
+  late List<VideoLink> _links;
   late TextEditingController _tagsController;
   late List<Map<String, dynamic>> _episodes;
   late List<QuizModel> _quizzes;
@@ -36,6 +39,11 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
     super.initState();
     _titleController = TextEditingController(text: widget.video.videoName);
     _linkController = TextEditingController(text: widget.video.link ?? '');
+    _links = widget.video.links.isNotEmpty
+        ? List<VideoLink>.from(widget.video.links)
+        : (widget.video.link?.isNotEmpty == true
+            ? [VideoLink(url: widget.video.link!)]
+            : []);
     _tagsController = TextEditingController(text: widget.video.tags?.join(', ') ?? '');
     
     _quizzes = widget.video.quizzes != null ? List<QuizModel>.from(widget.video.quizzes!) : [];
@@ -88,10 +96,12 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
 
     try {
       // 1. Update main video basic metadata (title, link, tags)
+      final primaryLink = _links.isNotEmpty ? _links.first.url : newLink;
       final updatedMainVideo = await _videoService.updateVideoMetadata(
         widget.video.id, 
         newTitle,
-        link: newLink,
+        link: primaryLink,
+        links: _links,
         tags: newTags,
         quizzes: _quizzes,
         thumbnailFile: _selectedThumbnail,
@@ -115,6 +125,7 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
           Navigator.of(context).pop({
             'videoName': updatedMainVideo.videoName,
             'link': updatedMainVideo.link,
+            'links': updatedMainVideo.links,
             'tags': updatedMainVideo.tags,
             'quizzes': updatedMainVideo.quizzes,
             'episodes': seriesResult['episodes'], // Full list from backend
@@ -131,7 +142,8 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
           finalVideo = await _videoService.updateVideoMetadata(
             widget.video.id, 
             newTitle,
-            link: newLink,
+            link: primaryLink,
+            links: _links,
             tags: newTags,
             seriesId: '', // Explicitly clear
             episodeNumber: 0, // Explicitly clear
@@ -145,6 +157,7 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
           Navigator.of(context).pop({
             'videoName': finalVideo.videoName,
             'link': finalVideo.link,
+            'links': finalVideo.links,
             'tags': finalVideo.tags,
             'quizzes': finalVideo.quizzes,
             'episodes': finalVideo.episodes,
@@ -525,13 +538,72 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
                 onChanged: (_) { setState(() {}); setModalState(() {}); },
               ),
               AppSpacing.vSpace24,
-              _buildSectionHeader('CTA Link', Icons.link_rounded),
+              _buildSectionHeader('Promotional Links', Icons.link_rounded),
               AppSpacing.vSpace8,
-              _buildTextField(
-                controller: _linkController,
-                hintText: 'https://example.com',
-                keyboardType: TextInputType.url,
-                onChanged: (_) { setState(() {}); setModalState(() {}); },
+              InkWell(
+                onTap: () {
+                  MultiLinkEditorSheet.show(
+                    context,
+                    initialLinks: _links
+                        .map((l) => LinkItemData(url: l.url, title: l.title))
+                        .toList(),
+                    onSave: (saved) {
+                      setState(() {
+                        _links = saved
+                            .map((item) => VideoLink(url: item.url, title: item.title))
+                            .toList();
+                        _linkController.text =
+                            _links.isNotEmpty ? _links.first.url : '';
+                      });
+                      setModalState(() {});
+                    },
+                  );
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.spacing16,
+                    vertical: AppSpacing.spacing12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundSecondary,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.borderSecondary),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.link_rounded,
+                          color: AppColors.primaryLight, size: 20),
+                      AppSpacing.hSpace12,
+                      Expanded(
+                        child: Text(
+                          _links.isEmpty
+                              ? 'Tap to add promotional links'
+                              : (_links.length == 1
+                                  ? (_links.first.displayTitle.isNotEmpty
+                                      ? _links.first.displayTitle
+                                      : _links.first.url)
+                                  : '${_links.length} Links added'),
+                          style: AppTypography.bodySmall.copyWith(
+                            color: _links.isEmpty
+                                ? AppColors.textTertiary
+                                : AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      AppSpacing.hSpace8,
+                      Text(
+                        _links.isEmpty ? 'Add' : 'Edit',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               AppSpacing.vSpace24,
               _buildSectionHeader('Tags', Icons.tag_rounded),

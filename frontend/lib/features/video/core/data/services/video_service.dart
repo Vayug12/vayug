@@ -759,6 +759,7 @@ class VideoService implements IVideoService {
     required String title,
     String? description,
     String? link,
+    List<VideoLink>? links,
     String? category,
     List<String>? tags,
     String? videoType,
@@ -809,6 +810,7 @@ class VideoService implements IVideoService {
         title: title,
         description: description,
         link: link,
+        links: links,
         category: category,
         tags: tags,
         videoType: videoType,
@@ -839,6 +841,7 @@ class VideoService implements IVideoService {
     required String title,
     String? description,
     String? link,
+    List<VideoLink>? links,
     String? category,
     List<String>? tags,
     String? videoType,
@@ -965,6 +968,7 @@ class VideoService implements IVideoService {
           'videoName': title,
           'description': description,
           'link': link,
+          'links': links?.map((l) => l.toJson()).toList(),
           'size': fileSize,
           'category': category,
           'tags': tags,
@@ -1074,6 +1078,7 @@ class VideoService implements IVideoService {
 
   Future<VideoModel> updateVideoMetadata(String videoId, String videoName,
       {String? link,
+      List<VideoLink>? links,
       List<String>? tags,
       String? seriesId,
       int? episodeNumber,
@@ -1090,6 +1095,7 @@ class VideoService implements IVideoService {
       };
 
       if (link != null) updateData['link'] = link;
+      if (links != null) updateData['links'] = links.map((l) => l.toJson()).toList();
       if (tags != null) updateData['tags'] = tags;
       if (seriesId != null) updateData['seriesId'] = seriesId;
       if (episodeNumber != null) updateData['episodeNumber'] = episodeNumber;

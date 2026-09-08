@@ -124,27 +124,33 @@ class ProfileDialogsWidget {
     );
   }
 
-  /// Help sheet: a flow diagram guide and the walkthrough video, switched
-  /// from the icon toggle in the header corner. No title, no close button -
-  /// the user opened it, the handle closes it.
+  /// Help sheet: displays FAQs, earning flow diagrams, and video walkthrough,
+  /// switched from the segmented toggle in the header corner.
   static void showFAQDialog(BuildContext context) {
-    final section = ValueNotifier<_HelpSection>(_HelpSection.guide);
+    final section = ValueNotifier<_HelpSection>(_HelpSection.faq);
 
     VayuBottomSheet.show(
       context: context,
       useDraggable: true,
       showCloseButton: false,
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
+      initialChildSize: 0.85,
+      minChildSize: 0.45,
       maxChildSize: 0.95,
       actions: [_HelpSectionToggle(section: section)],
       child: ValueListenableBuilder<_HelpSection>(
         valueListenable: section,
-        builder: (context, selected, _) => selected == _HelpSection.video
-            // Swapping the player out of the tree disposes its controller, so
-            // nothing keeps buffering while the guide is open.
-            ? _buildHelpVideoSection(context)
-            : _buildHelpGuideSection(context),
+        builder: (context, selected, _) {
+          switch (selected) {
+            case _HelpSection.faq:
+              return _buildHelpFAQSection(context);
+            case _HelpSection.video:
+              // Swapping the player out of the tree disposes its controller, so
+              // nothing keeps buffering while another tab is open.
+              return _buildHelpVideoSection(context);
+            case _HelpSection.guide:
+              return _buildHelpGuideSection(context);
+          }
+        },
       ),
     ).whenComplete(section.dispose);
   }
@@ -194,6 +200,68 @@ class ProfileDialogsWidget {
           autoPlay: true,
         ),
         const SizedBox(height: 24),
+        AppButton(
+          isFullWidth: true,
+          onPressed: () => Navigator.pop(context),
+          label: 'Samajh Gaya',
+          variant: AppButtonVariant.primary,
+        ),
+      ],
+    );
+  }
+
+  static Widget _buildHelpFAQSection(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFAQItem(
+          question: 'Can I watch videos in external players like VLC or MX Player?',
+          answer:
+              'Yes! While watching long-form videos on Vayug (Android), you can open and stream videos directly in external media players (such as VLC, MX Player, etc.) from the video player menu.',
+          icon: Icons.open_in_new_rounded,
+          color: AppColors.primary,
+        ),
+        _buildFAQItem(
+          question: 'What are Guaranteed Ad Impressions?',
+          answer:
+              'Unlike traditional platforms where ad reach is uncertain, Vayug provides guaranteed ad impressions for advertisers with transparent metrics and clear ROI. Creators earn an 80% revenue split based on verified ad impressions.',
+          icon: Icons.verified_outlined,
+          color: Colors.teal,
+        ),
+        _buildFAQItem(
+          question: 'Who is the Target Audience for Vayug?',
+          answer:
+              'Vayug is designed for: (1) Creators seeking fair 80% revenue share and subscriber ownership; (2) Viewers who want an uninterrupted, clean short and long video experience; and (3) Advertisers looking for verified reach and guaranteed impressions.',
+          icon: Icons.groups_outlined,
+          color: Colors.deepPurpleAccent,
+        ),
+        _buildFAQItem(
+          question: 'How do creators earn money on Vayug?',
+          answer:
+              'Share Vayug with 2 friends or upload 2 videos to unlock Setup Billing. Link your UPI ID in the Account tab to receive monthly payouts from eligible ad impressions.',
+          icon: Icons.account_balance_wallet_outlined,
+          color: Colors.amber,
+        ),
+        _buildFAQItem(
+          question: 'Can creators send direct alerts to subscribers?',
+          answer:
+              'Yes! Creators can send direct push alerts to eligible subscribers (up to 2 times a day) and export their subscriber list for off-platform audience connection.',
+          icon: Icons.notifications_active_outlined,
+          color: Colors.orange,
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: TextButton.icon(
+            onPressed: () => _launchURL('https://snehayog.site/faq.html', context: context),
+            icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+            label: const Text('Read Full Web FAQs'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         AppButton(
           isFullWidth: true,
           onPressed: () => Navigator.pop(context),
@@ -297,6 +365,11 @@ class ProfileDialogsWidget {
             title: 'Contact Us',
             icon: Icons.contact_support_outlined,
             url: 'https://snehayog.site/contact.html',
+          ),
+          _VerticalLegalItem(
+            title: 'Help & FAQs',
+            icon: Icons.help_outline_rounded,
+            url: 'https://snehayog.site/faq.html',
           ),
           _VerticalLegalItem(
             title: 'About Us',
@@ -694,8 +767,8 @@ class _VerticalLegalItemState extends State<_VerticalLegalItem> {
   }
 }
 
-/// Which half of the help sheet is showing
-enum _HelpSection { guide, video }
+/// Which section of the help sheet is showing
+enum _HelpSection { faq, guide, video }
 
 /// Icon-only segmented toggle for the help sheet header corner.
 class _HelpSectionToggle extends StatelessWidget {
@@ -717,6 +790,12 @@ class _HelpSectionToggle extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _buildSegment(
+              value: _HelpSection.faq,
+              selected: selected,
+              icon: Icons.help_outline_rounded,
+              label: 'FAQ',
+            ),
             _buildSegment(
               value: _HelpSection.guide,
               selected: selected,

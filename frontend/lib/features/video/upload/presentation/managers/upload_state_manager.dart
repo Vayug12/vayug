@@ -20,6 +20,7 @@ class _UploadRequest {
   final String title;
   final String description;
   final String? link;
+  final List<VideoLink>? links;
   final File? thumbnail;
   final List<String> tags;
   final List<String>? platforms;
@@ -31,6 +32,7 @@ class _UploadRequest {
     required this.title,
     required this.description,
     this.link,
+    this.links,
     this.thumbnail,
     this.tags = const [],
     this.platforms,
@@ -252,6 +254,7 @@ class UploadStateManager extends ChangeNotifier {
     required String title,
     required String description,
     String? link,
+    List<VideoLink>? links,
     File? thumbnailFile,
     List<String>? tags,
     List<String>? platforms,
@@ -270,6 +273,7 @@ class UploadStateManager extends ChangeNotifier {
       title: title,
       description: description,
       link: link,
+      links: links,
       thumbnail: thumbnailFile ?? _selectedThumbnail,
       tags: tags ?? _tags,
       platforms: platforms,
@@ -513,6 +517,7 @@ class UploadStateManager extends ChangeNotifier {
   }) {
     return {
       'link': request.link,
+      'links': request.links,
       'tags': request.tags,
       'crossPostPlatforms': request.platforms,
       'category': _selectedCategory,

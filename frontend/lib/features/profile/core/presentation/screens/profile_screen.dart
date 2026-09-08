@@ -19,7 +19,6 @@ import 'package:vayug/shared/services/app_remote_config_service.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'dart:async';
-import 'package:share_plus/share_plus.dart' as sp;
 import 'package:vayug/shared/services/http_client_service.dart';
 import 'package:vayug/features/profile/core/presentation/widgets/profile_static_views.dart';
 import 'package:vayug/features/ads/data/services/ad_service.dart';
@@ -530,12 +529,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ? '\n🎁 Referral Code: $referralCode'
           : '';
       final String message =
-          '🚀 Create. Monetize. Scale — From Day 1 on Vayu!\n\n'
+          '🚀 Create. Monetize. Scale — From Day 1 on Vayug!\n\n'
           '💰 Zero 1K Subs Barrier: Monetize from your very first video (80% revenue split)\n'
           '🔗 10x Conversion: Add your direct website/store link below every video\n'
           '🔐 Private E2EE: Publish exclusive encrypted videos for subscribers\n'
           '⚡ Instant UPI payouts directly to your bank$codeSnippet\n\n'
-          'Install Vayu from Play Store & start earning:\n'
+          'Install Vayug from Play Store & start earning:\n'
           '$playStoreUrl';
 
       final creatorName =

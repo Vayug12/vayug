@@ -5,6 +5,7 @@ import 'package:vayug/features/ads/data/services/ad_service.dart';
 import 'package:vayug/features/auth/data/services/authservices.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vayug/shared/utils/url_utils.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 
 class AdDisplayWidget extends StatefulWidget {
   final AdModel ad;
@@ -67,10 +68,28 @@ class _AdDisplayWidgetState extends State<AdDisplayWidget> {
         );
       }
 
-      // Launch the ad link
-      if (widget.ad.link != null && widget.ad.link!.isNotEmpty) {
+      if (!mounted) return;
+
+      // Multi-link support
+      if (widget.ad.links.length > 1) {
+        LinksBottomSheet.show(
+          context,
+          title: widget.ad.title.isNotEmpty ? widget.ad.title : 'Sponsored Links',
+          links: widget.ad.links,
+          source: 'vayug',
+          medium: 'app_ad',
+          campaign: 'vayug_ads',
+        );
+        return;
+      }
+
+      // Single link launch
+      final singleUrl = widget.ad.links.isNotEmpty
+          ? widget.ad.links.first.url
+          : (widget.ad.link ?? '');
+      if (singleUrl.isNotEmpty) {
         final enrichedUrl = UrlUtils.enrichUrl(
-          widget.ad.link!,
+          singleUrl,
           source: 'vayug',
           medium: 'app_ad',
           campaign: 'vayug_ads',

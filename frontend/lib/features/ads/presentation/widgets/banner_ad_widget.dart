@@ -12,6 +12,8 @@ import 'package:vayug/shared/constants/app_constants.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/shared/widgets/in_app_browser.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Widget to display banner ads at the top of video feed
 class BannerAdWidget extends StatefulWidget {
@@ -387,13 +389,56 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
     try {
       final adId = widget.adData['_id'] ?? widget.adData['id'];
 
-      // Resolve link from multiple keys and ensure absolute URL
-      String link = (widget.adData['link'] ??
+      // Check for multi-links first
+      final rawLinks = widget.adData['links'];
+      List<LinkItemData> parsedLinks = [];
+      if (rawLinks is List && rawLinks.isNotEmpty) {
+        parsedLinks = rawLinks.map((l) {
+          if (l is Map) {
+            return LinkItemData(
+              url: (l['url'] ?? '').toString(),
+              title: (l['title'] ?? '').toString(),
+            );
+          }
+          return LinkItemData(url: l.toString());
+        }).where((l) => l.url.trim().isNotEmpty).toList();
+      }
+
+      if (parsedLinks.length > 1) {
+        LinksBottomSheet.show(
+          context,
+          title: widget.adData['title'] ?? 'Sponsored Links',
+          links: parsedLinks,
+          medium: 'in_app_banner_ad',
+          campaign: 'vayug_ads',
+          onLinkTapped: (item) async {
+            if (adId != null) {
+              final activeAdsService = widget.adService ?? ActiveAdsService();
+              await activeAdsService.trackClick(adId);
+            }
+            widget.onAdClick?.call();
+            final enriched = UrlUtils.enrichUrl(
+              item.url,
+              source: 'vayug',
+              medium: 'in_app_banner_ad',
+              campaign: 'vayug_ads',
+            );
+            final uri = Uri.tryParse(enriched);
+            if (uri != null && await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+        );
+        return;
+      }
+
+      // Single link fallback
+      String link = (parsedLinks.isNotEmpty ? parsedLinks.first.url : (widget.adData['link'] ??
               widget.adData['url'] ??
               widget.adData['ctaUrl'] ??
               widget.adData['callToActionUrl'] ??
               widget.adData['targetUrl'] ??
-              '')
+              ''))
           .toString();
 
       // Fallback: nested callToAction map from backend

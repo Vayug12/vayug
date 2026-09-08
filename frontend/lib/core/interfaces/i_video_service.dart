@@ -21,6 +21,7 @@ abstract class IVideoService {
     required String title,
     String? description,
     String? link,
+    List<VideoLink>? links,
     String? category,
     List<String>? tags,
     String? videoType,

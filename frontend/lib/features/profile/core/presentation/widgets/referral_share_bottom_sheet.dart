@@ -42,6 +42,7 @@ class ReferralShareBottomSheet extends StatefulWidget {
       showHandle: true,
       showCloseButton: true,
       title: 'Share Creator Card',
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
       child: ReferralShareBottomSheet(
         creatorName: creatorName,
         profilePicUrl: profilePicUrl,
@@ -145,99 +146,119 @@ class _ReferralShareBottomSheetState extends State<ReferralShareBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. Status Text (Calm & minimal, 1 line)
-          Text(
-            widget.invitedCount >= 2
-                ? 'Full access unlocked'
-                : 'Share with 2 friends to unlock billing setup (${widget.invitedCount}/2)',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // 2. Story Card Preview
-          Center(
-            child: RepaintBoundary(
-              key: _cardBoundaryKey,
-              child: ReferralStoryCard(
-                creatorName: widget.creatorName,
-                profilePicUrl: widget.profilePicUrl,
-                referralCode: widget.referralCode,
-                width: 280,
-                height: 480,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 1. Status Text (Show invite progress if not yet unlocked)
+        if (widget.invitedCount < 2)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Share with 2 friends to unlock billing setup (${widget.invitedCount}/2)',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 12.5,
               ),
             ),
           ),
-          const SizedBox(height: 24),
 
-          // 3. Share Buttons (Consistent secondary surface style matching design.md)
-          if (_isExporting)
-            const SizedBox(
-              height: 52,
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(AppColors.primary),
+        // 2. Share Options (Positioned at TOP of sheet, Apple secondary style)
+        if (_isExporting)
+          const SizedBox(
+            height: 96,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    ),
                   ),
+                  SizedBox(height: 10),
+                  Text(
+                    'Generating card...',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else ...[
+          Row(
+            children: [
+              Expanded(
+                child: _buildShareButton(
+                  icon: HugeIcons.strokeRoundedWhatsapp,
+                  label: 'WhatsApp',
+                  onTap: _shareToWhatsApp,
                 ),
               ),
-            )
-          else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _buildShareButton(
-                    icon: HugeIcons.strokeRoundedWhatsapp,
-                    label: 'WhatsApp',
-                    onTap: _shareToWhatsApp,
-                  ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildShareButton(
+                  icon: HugeIcons.strokeRoundedInstagram,
+                  label: 'Instagram',
+                  onTap: _shareToInstagram,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildShareButton(
-                    icon: HugeIcons.strokeRoundedInstagram,
-                    label: 'Instagram',
-                    onTap: _shareToInstagram,
-                  ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildShareButton(
+                  icon: HugeIcons.strokeRoundedCopy01,
+                  label: 'Copy link',
+                  onTap: _copyLinkAndCode,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildShareButton(
-                    icon: HugeIcons.strokeRoundedCopy01,
-                    label: 'Copy link',
-                    onTap: _copyLinkAndCode,
-                  ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildShareButton(
+                  icon: HugeIcons.strokeRoundedShare01,
+                  label: 'More',
+                  onTap: _shareNative,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildShareButton(
-                    icon: HugeIcons.strokeRoundedShare01,
-                    label: 'More',
-                    onTap: _shareNative,
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ],
-      ),
+
+        const SizedBox(height: 18),
+
+        // 3. Story Card Preview (Placed BELOW all share options with responsive sizing)
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final availableWidth = constraints.maxWidth;
+            final cardWidth = availableWidth.clamp(260.0, 310.0);
+            final cardHeight = (cardWidth * 1.62).clamp(440.0, 490.0);
+
+            return Center(
+              child: RepaintBoundary(
+                key: _cardBoundaryKey,
+                child: ReferralStoryCard(
+                  creatorName: widget.creatorName,
+                  profilePicUrl: widget.profilePicUrl,
+                  referralCode: widget.referralCode,
+                  width: cardWidth,
+                  height: cardHeight,
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -253,17 +274,18 @@ class _ReferralShareBottomSheetState extends State<ReferralShareBottomSheet> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: AppColors.borderPrimary,
+              color: Colors.white.withValues(alpha: 0.08),
               width: 1,
             ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               HugeIcon(
                 icon: icon,
@@ -271,12 +293,16 @@ class _ReferralShareBottomSheetState extends State<ReferralShareBottomSheet> {
                 size: 18,
               ),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13.5,
+                  ),
                 ),
               ),
             ],

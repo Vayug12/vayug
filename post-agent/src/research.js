@@ -181,17 +181,22 @@ export async function runSearch(query) {
   return searchDuckDuckGoHtml(query);
 }
 
-export function buildQueries({ topic, projectName = 'Snehayog/Vayug' }) {
+export function buildQueries({ topic, projectName }) {
   const subject = topic || 'creator video monetization and audience growth';
   const year = new Date().getFullYear();
   // For long/complex topics, use shorter queries to avoid DDG returning nothing
   const words = subject.split(/\s+/);
   const shortTopic = words.length > 6 ? words.slice(0, 5).join(' ') : subject;
-  return [
+  const queries = [
     `${shortTopic} ${year}`,
     `${shortTopic} latest news`,
-    `${projectName} ${shortTopic}`,
   ];
+  if (projectName) {
+    queries.push(`${projectName} ${shortTopic}`);
+  } else {
+    queries.push(`${shortTopic} analysis insights`);
+  }
+  return queries;
 }
 
 const DDG_DELAY_MS = 1500;

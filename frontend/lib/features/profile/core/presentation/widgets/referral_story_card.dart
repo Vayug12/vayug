@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:vayug/core/design/colors.dart';
-import 'package:vayug/core/design/radius.dart';
 import 'package:vayug/core/design/typography.dart';
 
 class ReferralStoryCard extends StatelessWidget {
@@ -18,7 +17,7 @@ class ReferralStoryCard extends StatelessWidget {
     this.profilePicUrl,
     this.referralCode,
     this.width = 300,
-    this.height = 520,
+    this.height = 480,
   });
 
   @override
@@ -26,20 +25,27 @@ class ReferralStoryCard extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
       decoration: BoxDecoration(
-        color: AppColors.backgroundPrimary,
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.surfacePrimary,
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: AppColors.borderPrimary,
+          color: Colors.white.withValues(alpha: 0.08),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 1. Top Bar: Minimal Vayug Wordmark
+          // 1. Top Bar: Apple-style Minimal Wordmark (duplicate CREATOR badge removed)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -48,28 +54,11 @@ class ReferralStoryCard extends StatelessWidget {
                 style: AppTypography.titleSmall.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 2.0,
-                  fontSize: 14,
+                  letterSpacing: 2.5,
+                  fontSize: 13,
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.surfacePrimary,
-                  borderRadius: BorderRadius.circular(AppRadius.xs),
-                  border: Border.all(color: AppColors.borderPrimary, width: 1),
-                ),
-                child: Text(
-                  'CREATOR',
-                  style: AppTypography.labelSmall.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.0,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
+              const SizedBox.shrink(),
             ],
           ),
 
@@ -82,15 +71,27 @@ class ReferralStoryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      creatorName.isNotEmpty ? creatorName : 'Vayug Creator',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.titleSmall.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            creatorName.isNotEmpty ? creatorName : 'Vayug Creator',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.titleSmall.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.verified,
+                          color: AppColors.primary,
+                          size: 16,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -106,66 +107,98 @@ class ReferralStoryCard extends StatelessWidget {
             ],
           ),
 
-          const Divider(color: AppColors.borderPrimary, height: 1),
+          Divider(
+            color: Colors.white.withValues(alpha: 0.06),
+            height: 20,
+            thickness: 1,
+          ),
 
-          // 3. Direct Features List (Zero helper text, calm & minimal)
+          // 3. Direct Features List (Apple Card style with squircle icon chips)
           Column(
             children: [
               _buildFeatureRow(
                 icon: HugeIcons.strokeRoundedMoney04,
-                label: 'Day 1 monetization',
+                title: 'Day 1 monetization',
+                subtitle: 'Monetize from your very first video',
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               _buildFeatureRow(
                 icon: HugeIcons.strokeRoundedLink01,
-                label: 'Link below every video',
+                title: 'Link below every video',
+                subtitle: 'Direct store & bio link conversion',
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               _buildFeatureRow(
                 icon: HugeIcons.strokeRoundedShield01,
-                label: 'Private E2EE videos',
+                title: 'Private E2EE videos',
+                subtitle: 'Encrypted exclusive subscriber content',
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               _buildFeatureRow(
                 icon: HugeIcons.strokeRoundedFlash,
-                label: 'Instant UPI payouts',
+                title: 'Instant UPI payouts',
+                subtitle: 'Revenue sent directly to your bank',
               ),
             ],
           ),
 
-          const Divider(color: AppColors.borderPrimary, height: 1),
+          Divider(
+            color: Colors.white.withValues(alpha: 0.06),
+            height: 20,
+            thickness: 1,
+          ),
 
           // 4. Bottom Footer: Referral Code + Store Info
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               if (referralCode != null && referralCode!.isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfacePrimary,
-                    borderRadius: BorderRadius.circular(AppRadius.xs),
-                    border:
-                        Border.all(color: AppColors.borderPrimary, width: 1),
-                  ),
-                  child: Text(
-                    'Code: $referralCode',
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
+                Flexible(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSecondary,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      'Code: $referralCode',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.4,
+                        fontSize: 11.5,
+                      ),
                     ),
                   ),
                 )
               else
                 const SizedBox.shrink(),
-              Text(
-                'Google Play Store',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.play_arrow_rounded,
+                    color: AppColors.textSecondary,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Google Play Store',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -195,17 +228,17 @@ class ReferralStoryCard extends StatelessWidget {
     }
 
     return Container(
-      width: 44,
-      height: 44,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: AppColors.borderPrimary,
-          width: 1,
+          color: Colors.white.withValues(alpha: 0.15),
+          width: 1.5,
         ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(23),
         child: avatarContent,
       ),
     );
@@ -213,36 +246,65 @@ class ReferralStoryCard extends StatelessWidget {
 
   Widget _fallbackAvatarIcon() {
     return Container(
-      color: AppColors.surfacePrimary,
+      color: AppColors.surfaceSecondary,
       alignment: Alignment.center,
       child: const HugeIcon(
         icon: HugeIcons.strokeRoundedUser,
         color: AppColors.textSecondary,
-        size: 20,
+        size: 22,
       ),
     );
   }
 
   Widget _buildFeatureRow({
     required dynamic icon,
-    required String label,
+    required String title,
+    required String subtitle,
   }) {
     return Row(
       children: [
-        HugeIcon(
-          icon: icon,
-          color: AppColors.primary,
-          size: 18,
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSecondary,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.06),
+              width: 1,
+            ),
+          ),
+          child: Center(
+            child: HugeIcon(
+              icon: icon,
+              color: AppColors.primary,
+              size: 18,
+            ),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            label,
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 1.5),
+              Text(
+                subtitle,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
           ),
         ),
       ],

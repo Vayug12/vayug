@@ -23,7 +23,7 @@ export async function saveOutput({ platform, topic, provider, post, research, co
       topic,
       provider,
       searchProvider: research.provider,
-      contextFiles: context.files,
+      contextFiles: context?.files || [],
       sources: research.results.map(({ title, url, published }) => ({ title, url, published })),
     }, null, 2), 'utf8'),
   ]);

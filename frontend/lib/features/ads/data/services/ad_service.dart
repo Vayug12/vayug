@@ -33,6 +33,7 @@ class AdService {
     String? imageUrl,
     String? videoUrl,
     String? link,
+    List<Map<String, String>>? links,
     required String adType,
     required int budget,
     required String targetAudience,
@@ -64,7 +65,10 @@ class AdService {
           'description': description,
           'imageUrl': imageUrl,
           'videoUrl': videoUrl,
-          'link': link,
+          'link': (link != null && link.isNotEmpty)
+              ? link
+              : (links != null && links.isNotEmpty ? links.first['url'] : null),
+          'links': links,
           'adType': adType == 'carousel'
               ? 'carousel'
               : adType == 'video feed'
@@ -132,6 +136,8 @@ class AdService {
     int? attributionWindow,
     // **NEW: Support multiple image URLs for carousel ads**
     List<String>? imageUrls,
+    // **NEW: Multi-link support**
+    List<Map<String, String>>? links,
   }) async {
     try {
       final userData = await _authService.getUserData();
@@ -176,6 +182,15 @@ class AdService {
             ? endDate.difference(startDate).inDays + 1
             : 1,
       };
+
+      // **NEW: Multi-link support**
+      if (links != null && links.isNotEmpty) {
+        requestData['links'] = links;
+        if (requestData['link'] == null ||
+            (requestData['link'] as String).isEmpty) {
+          requestData['link'] = links.first['url'];
+        }
+      }
 
       // **NEW: Add imageUrls for carousel ads**
       if (imageUrls != null && imageUrls.isNotEmpty && adType == 'carousel') {

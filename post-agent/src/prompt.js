@@ -1,10 +1,10 @@
 const HISTORY_LIMIT = 20;
 
 const PLATFORM_RULES = {
-  linkedin: `Write a thoughtful LinkedIn post. Start with a strong observation or hook, explain the problem, connect it to the project, and end with a conversational question or restrained CTA. Use short paragraphs. Avoid corporate jargon. Target 130-200 words.`,
-  x: `Write an X post or short thread. Make the first line stand alone as a hook. Use concise, conversational language. If a thread helps, number it clearly with 1., 2., etc. Target 1-5 short posts and stay within normal X post length.`,
-  reddit: `Write a natural Reddit-style post. Use an honest title followed by a useful, non-promotional body. Discuss the problem, what the project is trying, and invite criticism or experience from the community. Do not sound like an advertisement. Target 130-250 words.`,
-  substack: `Write a Substack-style mini-essay with a clear title, a strong opening, a few descriptive section headings, and a reflective conclusion. Explain the problem and how the project approaches it. Target 500-800 words.`,
+  linkedin: `Write a thoughtful LinkedIn post. Start with a strong observation or hook, explain the problem, connect it to the project, and end with a conversational question or restrained CTA. Use short paragraphs. Avoid corporate jargon. Keep it punchy and concise (target 60-160 words, max 200 words). Do not pad with filler.`,
+  x: `Write an X post or short thread. Make the first line stand alone as a hook. Use concise, conversational language. Target 1-3 short, punchy posts (or a single crisp post under 280 characters). Every line should add direct value.`,
+  reddit: `Write a natural Reddit-style post. Use an honest title followed by a useful, non-promotional body. Discuss the problem, what the project is trying, and invite criticism or experience from the community. Do not sound like an advertisement. Target 60-180 words (max 250 words). Get straight to the point without filler.`,
+  substack: `Write a Substack-style mini-essay with a clear title, a strong opening, a few descriptive section headings, and a reflective conclusion. Explain the problem and how the project approaches it. Target 250-600 words (max 800 words). Focus on quality and insight without artificial padding.`,
 };
 
 const PLATFORM_AUDIENCE = {
@@ -12,6 +12,20 @@ const PLATFORM_AUDIENCE = {
   x: `Creators and indie builders scrolling fast. They will read the first line and nothing else unless it earns them.`,
   reddit: `Working creators who will smell a pitch instantly and downvote it. They reward honesty about what does not work yet.`,
   substack: `Readers who opted in for the argument, not the announcement. They will follow a longer line of reasoning if it goes somewhere.`,
+};
+
+export const GENERIC_PLATFORM_RULES = {
+  linkedin: `Write a thoughtful, insightful LinkedIn post. Start with a strong observation or hook, break down the core insight or problem with clear examples, and end with an engaging question or takeaway. Use short paragraphs. Avoid corporate jargon. Keep it punchy and concise (target 60-160 words, max 200 words). Do not pad with filler.`,
+  x: `Write an X post or short thread. Make the first line stand alone as a hook. Share concise, practical insights. Target 1-3 short, punchy posts (or a single crisp post under 280 characters). Every line should add direct value.`,
+  reddit: `Write a natural, high-value Reddit-style post. Use an honest, intriguing title followed by an insightful, non-promotional body. Discuss the topic in-depth, share actionable perspectives, and invite discussion from the community. Do not sound like an advertisement or pitch. Target 60-180 words (max 250 words). Get straight to the point without filler.`,
+  substack: `Write an engaging Substack-style mini-essay with a clear title, a strong opening hook, a few descriptive section headings, and a thoughtful conclusion. Explore the topic with nuance and clarity. Target 250-600 words (max 800 words). Focus on quality and insight without artificial padding.`,
+};
+
+export const GENERIC_PLATFORM_AUDIENCE = {
+  linkedin: `Professionals, founders, and operators interested in industry trends, technology insights, and practical takeaways.`,
+  x: `Builders, thinkers, and professionals scrolling fast. They will read the first line and engage only if the hook and value are immediate.`,
+  reddit: `Community members who value authenticity, practical insight, and real discussion. They despise disguised marketing or generic fluff.`,
+  substack: `Curious readers who want an analytical, well-reasoned perspective on the topic.`,
 };
 
 function recentTopics(history, emptyMessage) {
@@ -93,6 +107,7 @@ ${previous}
 
 OUTPUT RULES
 - Return only the final post. No analysis, source list, markdown fences, or preamble.
+- Keep it concise, punchy, and high-signal. Do NOT artificially pad or lengthen the content with filler sentences. People prefer brief, direct reads.
 - Do not invent features, metrics, customer stories, quotes, or statistics.
 - Prefer qualitative findings from web research. Do not include exact external numbers, market-size claims, or statistics unless the post itself names or links the source; otherwise leave them out.
 - Do not write phrases such as "2026 data shows" or "research proves" without an inline source. Avoid asserting the absence of algorithms, fees, or platform limitations unless the project context documents that fact.
@@ -139,7 +154,7 @@ CHECK EACH OF THESE
 4. Does it claim proven results, adoption, usage, or revenue for a product still being built? This includes any phrasing that implies existing users or activity — "creators on Vayug are using X", "users report", "we've seen", "X is helping creators". No such claim is supported. Rewrite in terms of what the capability is designed to do for a creator, using "is building", "is designed to", "aims to", or "lets creators".
 5. Does it describe internal architecture, database models, caching, feature flags, or deployment? That is wrong for this audience. Replace it with what the capability means for the reader.
 6. Is the project connection concrete, naming an actual documented capability, rather than a generic reference to "the platform"?
-7. Does it fit the platform's length and tone rules above?
+7. Is it concise, sharp, and free of unnecessary fluff or padding? Trim any wordy, repetitive, or bloated sentences to keep the post punchy.
 8. Does the post end with 3-5 relevant, topic-specific hashtags? If missing or generic, add appropriate ones. If hashtags are repetitive or too broad, replace with more specific ones.
 
 Fix every problem you find. If the draft already passes all eight checks, return it unchanged.
@@ -147,18 +162,21 @@ Fix every problem you find. If the draft already passes all eight checks, return
 Return only the final post text. No commentary, no scores, no list of changes, no markdown fences.`;
 }
 
-export function buildTrendingPrompt({ platform, category, topic, newsItems, suggestedHashtags, context, research, history }) {
-  const sources = research.results
+export function buildTrendingPrompt({ platform, category, topic, newsItems, suggestedHashtags, context = {}, research, history, isCustom = true }) {
+  const sources = (research?.results || [])
     .map((item, index) => `${index + 1}. ${item.title}\nURL: ${item.url}\nEvidence: ${item.snippet || 'No snippet available'}${item.published ? `\nDate: ${item.published}` : ''}`)
     .join('\n\n');
 
-  const newsContext = newsItems
+  const newsContext = (newsItems || [])
     .map((item, index) => `${index + 1}. ${item.title}\n${item.snippet || ''}`)
     .join('\n\n');
 
-  const previous = recentTopics(history, 'No previous posts are available.');
+  const previous = recentTopics(history || [], 'No previous posts are available.');
 
-  const projectFactsBlock = context.text
+  const rules = isCustom ? (GENERIC_PLATFORM_RULES[platform] || GENERIC_PLATFORM_RULES.linkedin) : PLATFORM_RULES[platform];
+  const audience = isCustom ? (GENERIC_PLATFORM_AUDIENCE[platform] || GENERIC_PLATFORM_AUDIENCE.linkedin) : PLATFORM_AUDIENCE[platform];
+
+  const projectFactsBlock = !isCustom && context?.text
     ? `PROJECT FACTS
 Use only facts supported by the project context below. The app is currently being built; do not claim user growth, revenue results, adoption, or completed functionality unless the context explicitly supports it. Say "is building", "is designed to", or "aims to" when describing intended outcomes.
 
@@ -167,21 +185,41 @@ ${context.text}
 `
     : '';
 
+  const assignmentGuidance = isCustom
+    ? `Create an insightful, standalone post about this trending topic in ${category}: ${topic}
+
+Use the trending news below as context and inspiration. Make the post timely, thought-provoking, and relevant.`
+    : `Create a post about this trending topic in ${category}: ${topic}
+
+Use the trending news below as context and inspiration. Connect the trending topic to the creator economy and video platforms. Make the post timely and relevant.`;
+
+  const customOutputRule = isCustom
+    ? `- STRICTLY NO PROMOTION: Do NOT mention, promote, or reference any proprietary app, product, or company. This is a 100% generic, organic, and insightful post providing standalone value.`
+    : `- Connect the trending topic to the creator economy and video platforms.`;
+
+  const hashtagGuidance = isCustom
+    ? `- End every post with 3-5 relevant hashtags on a new line.
+- Use these suggested hashtags as a starting point: ${(suggestedHashtags || []).join(', ')}
+- Vary hashtags based on the specific topic and category.
+- Do not use company or app promotional hashtags.`
+    : `- End every post with 3-5 relevant hashtags on a new line.
+- Use these suggested hashtags as a starting point: ${(suggestedHashtags || []).join(', ')}
+- Add 1-2 topic-specific hashtags like #CreatorEconomy or #VideoPlatform.
+- Vary hashtags based on the specific topic.`;
+
   return `You are a research-first social content writer.
 
 PLATFORM
-${PLATFORM_RULES[platform]}
+${rules}
 
 AUDIENCE
-${PLATFORM_AUDIENCE[platform]}
+${audience}
 
 CATEGORY
 ${category}
 
 ASSIGNMENT
-Create a post about this trending topic in ${category}: ${topic}
-
-Use the trending news below as context and inspiration. Connect the trending topic to the creator economy and video platforms. Make the post timely and relevant.
+${assignmentGuidance}
 
 TRENDING NEWS
 ${newsContext}
@@ -196,16 +234,82 @@ ${previous}
 
 OUTPUT RULES
 - Return only the final post. No analysis, source list, markdown fences, or preamble.
+- Keep the post concise, punchy, and high-signal. Do NOT pad with filler or fluff to reach arbitrary length.
 - Do not invent features, metrics, customer stories, quotes, or statistics.
 - Prefer qualitative findings from web research. Do not include exact external numbers.
 - Make the post timely - reference current events or trends.
-- Connect the trending topic to the creator economy and video platforms.
+${customOutputRule}
+- Keep the tone human, clear, and useful.
+
+HASHTAG RULES
+${hashtagGuidance}
+`;
+}
+
+export function buildCustomPrompt({ platform, topic, research, history }) {
+  const sources = (research?.results || [])
+    .map((item, index) => `${index + 1}. ${item.title}\nURL: ${item.url}\nEvidence: ${item.snippet || 'No snippet available'}${item.published ? `\nDate: ${item.published}` : ''}`)
+    .join('\n\n');
+
+  const previous = recentTopics(history || [], 'No previous posts are available.');
+
+  return `You are a research-first social content writer.
+
+PLATFORM
+${GENERIC_PLATFORM_RULES[platform] || GENERIC_PLATFORM_RULES.linkedin}
+
+AUDIENCE
+${GENERIC_PLATFORM_AUDIENCE[platform] || GENERIC_PLATFORM_AUDIENCE.linkedin}
+
+ASSIGNMENT
+Create an insightful, standalone post about: ${topic}
+
+WEB RESEARCH
+${sources || 'No external research sources available.'}
+
+RECENT POST TOPICS TO AVOID REPEATING
+${previous}
+
+OUTPUT RULES
+- Return only the final post. No analysis, source list, markdown fences, or preamble.
+- Keep it concise, punchy, and high-signal. Avoid padding, filler, or repeating points to hit arbitrary length.
+- STRICTLY NO PROMOTION: Do NOT mention, promote, or reference any proprietary app, product, or company. This is a 100% generic, organic, high-value post.
+- Do not invent features, metrics, customer stories, quotes, or statistics.
+- Prefer qualitative findings from web research.
+- Make the post timely, insightful, and relevant.
 - Keep the tone human, clear, and useful.
 
 HASHTAG RULES
 - End every post with 3-5 relevant hashtags on a new line.
-- Use these suggested hashtags as a starting point: ${suggestedHashtags.join(', ')}
-- Add 1-2 topic-specific hashtags like #CreatorEconomy or #VideoPlatform.
-- Vary hashtags based on the specific topic.
+- Hashtags must be specific to the topic discussed.
+- Do not use company or app promotional hashtags.
 `;
+}
+
+export function buildGenericCritiquePrompt({ platform, topic, post }) {
+  return `You are an expert social media editor. Review the draft post below and return a polished, high-impact version.
+
+PLATFORM
+${GENERIC_PLATFORM_RULES[platform] || GENERIC_PLATFORM_RULES.linkedin}
+
+AUDIENCE
+${GENERIC_PLATFORM_AUDIENCE[platform] || GENERIC_PLATFORM_AUDIENCE.linkedin}
+
+TOPIC
+${topic}
+
+DRAFT POST
+${post}
+
+CHECK EACH OF THESE
+1. Does the first line stand alone as a compelling hook, or is it a throat-clearing preamble?
+2. STRICTLY NON-PROMOTIONAL: Ensure the post does NOT promote or mention any proprietary app, product, or company. If any app promotion, company name, or self-serving pitch is present, remove it completely and keep the post generic, educational, and discussion-oriented.
+3. Does it state unverified internal metrics, fake customer stories, or fabricated claims? Remove or soften them.
+4. Does it sound human, clear, and authentic, avoiding generic corporate clichés?
+5. Is it concise, punchy, and free of unnecessary fluff, filler, or padding? Trim any wordy or over-elaborate sections.
+6. Does the post end with 3-5 relevant, topic-specific hashtags?
+
+Fix every problem you find. If the draft already passes all checks, return it unchanged.
+
+Return only the final post text. No commentary, no scores, no list of changes, no markdown fences.`;
 }

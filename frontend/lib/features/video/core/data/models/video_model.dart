@@ -1,3 +1,49 @@
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+
+class VideoLink {
+  final String url;
+  final String title;
+
+  const VideoLink({
+    required this.url,
+    this.title = '',
+  });
+
+  String get displayTitle {
+    if (title.trim().isNotEmpty) return title.trim();
+    return cleanDomain;
+  }
+
+  String get cleanDomain {
+    try {
+      final uri = Uri.tryParse(url.trim());
+      if (uri != null && uri.host.isNotEmpty) {
+        return uri.host.replaceFirst(RegExp(r'^www\.'), '');
+      }
+    } catch (_) {}
+    return url.trim();
+  }
+
+  LinkItemData toLinkItemData() => LinkItemData(url: url, title: title);
+
+  factory VideoLink.fromJson(dynamic json) {
+    if (json is String) {
+      return VideoLink(url: json.trim());
+    }
+    if (json is Map) {
+      final url = (json['url'] ?? json['link'] ?? '').toString().trim();
+      final title = (json['title'] ?? json['label'] ?? '').toString().trim();
+      return VideoLink(url: url, title: title);
+    }
+    return const VideoLink(url: '');
+  }
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'url': url,
+  };
+}
+
 class VideoModel {
   final String id;
   final String videoName;
@@ -15,6 +61,7 @@ class VideoModel {
   final double aspectRatio;
   final Duration duration;
   final String? link;
+  final List<VideoLink> links;
   final List<String>? tags;
   final List<String>? keywords;
   // **NEW: Original video resolution (width x height)**
@@ -66,6 +113,7 @@ class VideoModel {
     required this.aspectRatio,
     required this.duration,
     this.link,
+    this.links = const [],
     this.tags,
     this.keywords,
     this.earnings = 0.0, // **NEW: Default earnings to 0.0**
@@ -92,6 +140,108 @@ class VideoModel {
     this.crossPostStatus,
     this.crossPostDetails,
   });
+
+  List<VideoLink> get validLinks =>
+      links.where((l) => l.url.trim().isNotEmpty).toList();
+
+  bool get hasMultipleLinks => validLinks.length > 1;
+
+  bool get hasLink =>
+      validLinks.isNotEmpty || (link != null && link!.trim().isNotEmpty);
+
+  bool get isMultiEpisodeSeries =>
+      seriesId != null &&
+      seriesId!.isNotEmpty &&
+      episodes != null &&
+      episodes!.length > 1;
+
+  VideoModel copyWith({
+    String? id,
+    String? videoName,
+    String? videoUrl,
+    String? thumbnailUrl,
+    int? likes,
+    int? views,
+    int? shares,
+    String? description,
+    Uploader? uploader,
+    DateTime? uploadedAt,
+    List<String>? likedBy,
+    String? videoType,
+    double? aspectRatio,
+    Duration? duration,
+    String? link,
+    List<VideoLink>? links,
+    List<String>? tags,
+    List<String>? keywords,
+    double? earnings,
+    String? hlsMasterPlaylistUrl,
+    String? hlsPlaylistUrl,
+    List<Map<String, dynamic>>? hlsVariants,
+    bool? isHLSEncoded,
+    String? lowQualityUrl,
+    String? processingStatus,
+    int? processingProgress,
+    String? processingError,
+    Map<String, dynamic>? originalResolution,
+    String? videoHash,
+    List<Map<String, dynamic>>? episodes,
+    bool clearEpisodes = false,
+    String? seriesId,
+    bool clearSeriesId = false,
+    int? episodeNumber,
+    List<QuizModel>? quizzes,
+    Map<String, String>? dubbedUrls,
+    bool? isLiked,
+    bool? isSaved,
+    bool? isOptimistic,
+    bool? isSubscriberOnly,
+    Map<String, String>? crossPostStatus,
+    Map<String, dynamic>? crossPostDetails,
+  }) {
+    return VideoModel(
+      id: id ?? this.id,
+      videoName: videoName ?? this.videoName,
+      videoUrl: videoUrl ?? this.videoUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      likes: likes ?? this.likes,
+      views: views ?? this.views,
+      shares: shares ?? this.shares,
+      description: description ?? this.description,
+      uploader: uploader ?? this.uploader,
+      uploadedAt: uploadedAt ?? this.uploadedAt,
+      likedBy: likedBy ?? this.likedBy,
+      videoType: videoType ?? this.videoType,
+      aspectRatio: aspectRatio ?? this.aspectRatio,
+      duration: duration ?? this.duration,
+      link: link ?? this.link,
+      links: links ?? this.links,
+      tags: tags ?? this.tags,
+      keywords: keywords ?? this.keywords,
+      earnings: earnings ?? this.earnings,
+      hlsMasterPlaylistUrl: hlsMasterPlaylistUrl ?? this.hlsMasterPlaylistUrl,
+      hlsPlaylistUrl: hlsPlaylistUrl ?? this.hlsPlaylistUrl,
+      hlsVariants: hlsVariants ?? this.hlsVariants,
+      isHLSEncoded: isHLSEncoded ?? this.isHLSEncoded,
+      lowQualityUrl: lowQualityUrl ?? this.lowQualityUrl,
+      processingStatus: processingStatus ?? this.processingStatus,
+      processingProgress: processingProgress ?? this.processingProgress,
+      processingError: processingError ?? this.processingError,
+      originalResolution: originalResolution ?? this.originalResolution,
+      videoHash: videoHash ?? this.videoHash,
+      episodes: clearEpisodes ? null : (episodes ?? this.episodes),
+      seriesId: clearSeriesId ? null : (seriesId ?? this.seriesId),
+      episodeNumber: clearSeriesId ? 0 : (episodeNumber ?? this.episodeNumber),
+      quizzes: quizzes ?? this.quizzes,
+      dubbedUrls: dubbedUrls ?? this.dubbedUrls,
+      isLiked: isLiked ?? this.isLiked,
+      isSaved: isSaved ?? this.isSaved,
+      isOptimistic: isOptimistic ?? this.isOptimistic,
+      isSubscriberOnly: isSubscriberOnly ?? this.isSubscriberOnly,
+      crossPostStatus: crossPostStatus ?? this.crossPostStatus,
+      crossPostDetails: crossPostDetails ?? this.crossPostDetails,
+    );
+  }
 
   factory VideoModel.fromJson(Map<String, dynamic> json) {
     try {
@@ -268,22 +418,41 @@ class VideoModel {
             seconds: (json['duration'] is num)
                 ? (json['duration'] as num).toInt()
                 : int.tryParse(json['duration']?.toString() ?? '0') ?? 0),
-        link: () {
-
-          // Try multiple possible field names for the link
+        links: () {
+          final rawLinks = json['links'];
+          if (rawLinks is List && rawLinks.isNotEmpty) {
+            final parsed = rawLinks
+                .map((item) => VideoLink.fromJson(item))
+                .where((l) => l.url.isNotEmpty)
+                .toList();
+            if (parsed.isNotEmpty) return parsed;
+          }
           final possibleFields = ['link', 'externalLink', 'websiteUrl', 'url'];
-
+          for (final field in possibleFields) {
+            if (json.containsKey(field)) {
+              final linkValue = json[field]?.toString().trim();
+              if (linkValue?.isNotEmpty == true) {
+                return [VideoLink(url: linkValue!)];
+              }
+            }
+          }
+          return <VideoLink>[];
+        }(),
+        link: () {
+          final possibleFields = ['link', 'externalLink', 'websiteUrl', 'url'];
           for (final field in possibleFields) {
             if (json.containsKey(field)) {
               final linkValue = json[field]?.toString().trim();
               if (linkValue?.isNotEmpty == true) {
                 return linkValue;
-              } else {
               }
-            } else {
             }
           }
-
+          final rawLinks = json['links'];
+          if (rawLinks is List && rawLinks.isNotEmpty) {
+            final first = VideoLink.fromJson(rawLinks.first);
+            if (first.url.isNotEmpty) return first.url;
+          }
           return null;
         }(),
         tags: json['tags'] != null ? List<String>.from(json['tags']) : null,
@@ -436,6 +605,7 @@ class VideoModel {
       'aspectRatio': aspectRatio,
       'duration': duration.inSeconds,
       'link': link,
+      'links': links.map((l) => l.toJson()).toList(),
       'tags': tags,
       'keywords': keywords,
       'earnings': earnings, // **NEW: Include earnings in JSON**
@@ -460,91 +630,6 @@ class VideoModel {
       'crossPostDetails': crossPostDetails,
       'quizzes': quizzes?.map((q) => q.toJson()).toList(),
     };
-  }
-
-  VideoModel copyWith({
-    String? id,
-    String? videoName,
-    String? videoUrl,
-    String? thumbnailUrl,
-    int? likes,
-    int? views,
-    int? shares,
-    String? description, // Add description parameter
-    Uploader? uploader,
-    DateTime? uploadedAt,
-    List<String>? likedBy,
-    String? videoType,
-    double? aspectRatio,
-    Duration? duration,
-    String? link,
-    List<String>? tags,
-    List<String>? keywords,
-    double? earnings, // **NEW: Add earnings to copyWith**
-    // **CRITICAL FIX: Add HLS fields to copyWith**
-    String? hlsMasterPlaylistUrl,
-    String? hlsPlaylistUrl,
-    List<Map<String, dynamic>>? hlsVariants,
-    bool? isHLSEncoded,
-    String? lowQualityUrl, // 480p URL
-    String? processingStatus,
-    int? processingProgress,
-    String? processingError,
-    String? videoHash, // **NEW: Add videoHash to copyWith**
-    List<Map<String, dynamic>>? episodes,
-    String? seriesId,
-    int? episodeNumber,
-    Map<String, String>? dubbedUrls,
-    bool? isLiked,
-    bool? isSaved, 
-    bool? isOptimistic,
-    bool? isSubscriberOnly, // **NEW**
-    Map<String, String>? crossPostStatus,
-    Map<String, dynamic>? crossPostDetails,
-    List<QuizModel>? quizzes,
-  }) {
-    return VideoModel(
-      id: id ?? this.id,
-      videoName: videoName ?? this.videoName,
-      videoUrl: videoUrl ?? this.videoUrl,
-      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
-      likes: likes ?? this.likes,
-      views: views ?? this.views,
-      shares: shares ?? this.shares,
-      description:
-          description ?? this.description, // Handle description in copyWith
-      uploader: uploader ?? this.uploader,
-      uploadedAt: uploadedAt ?? this.uploadedAt,
-      likedBy: likedBy ?? this.likedBy,
-      videoType: videoType ?? this.videoType,
-      aspectRatio: aspectRatio ?? this.aspectRatio,
-      duration: duration ?? this.duration,
-      link: link ?? this.link,
-      tags: tags ?? this.tags,
-      keywords: keywords ?? this.keywords,
-      earnings:
-          earnings ?? this.earnings, // Handle earnings in copyWith
-      hlsMasterPlaylistUrl: hlsMasterPlaylistUrl ?? this.hlsMasterPlaylistUrl,
-      hlsPlaylistUrl: hlsPlaylistUrl ?? this.hlsPlaylistUrl,
-      hlsVariants: hlsVariants ?? this.hlsVariants,
-      isHLSEncoded: isHLSEncoded ?? this.isHLSEncoded,
-      lowQualityUrl: lowQualityUrl ?? this.lowQualityUrl, // 480p URL
-      processingStatus: processingStatus ?? this.processingStatus,
-      processingProgress: processingProgress ?? this.processingProgress,
-      processingError: processingError ?? this.processingError,
-      videoHash: videoHash ?? this.videoHash, // Handle videoHash
-      episodes: episodes ?? this.episodes,
-      seriesId: seriesId ?? this.seriesId,
-      episodeNumber: episodeNumber ?? this.episodeNumber,
-      dubbedUrls: dubbedUrls ?? this.dubbedUrls,
-      isLiked: isLiked ?? this.isLiked,
-      isSaved: isSaved ?? this.isSaved,
-      isOptimistic: isOptimistic ?? this.isOptimistic,
-      isSubscriberOnly: isSubscriberOnly ?? this.isSubscriberOnly, // **NEW**
-      crossPostStatus: crossPostStatus ?? this.crossPostStatus,
-      crossPostDetails: crossPostDetails ?? this.crossPostDetails,
-      quizzes: quizzes ?? this.quizzes,
-    );
   }
 
   bool isLikedBy(String userId) => likedBy.contains(userId);

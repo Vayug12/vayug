@@ -194,12 +194,37 @@ router.post('/video/presigned', verifyToken, enforceDailyUploadAvailability, upl
 router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, res) => {
   let createdVideo = null;
   try {
-    const { key, videoName, description, link, size, category, tags, videoType, crossPostPlatforms, seriesId, episodeNumber, thumbnailKey, quizzes, allowedSubscribers, targetProfessionIds } = req.body;
+    const { key, videoName, description, link, links, size, category, tags, videoType, crossPostPlatforms, seriesId, episodeNumber, thumbnailKey, quizzes, allowedSubscribers, targetProfessionIds } = req.body;
     const userId = req.user.id;
 
     if (!key || !videoName) {
       return res.status(400).json({ success: false, error: 'Key and VideoName are required' });
     }
+
+    // Parse links array if provided
+    let parsedLinks = [];
+    if (Array.isArray(links)) {
+      parsedLinks = links.map(l => {
+        if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
+        if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+        return null;
+      }).filter(Boolean);
+    } else if (typeof links === 'string') {
+      try {
+        const decoded = JSON.parse(links);
+        if (Array.isArray(decoded)) {
+          parsedLinks = decoded.map(l => {
+            if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
+            if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+            return null;
+          }).filter(Boolean);
+        }
+      } catch (_) {}
+    }
+    if (parsedLinks.length === 0 && link && String(link).trim()) {
+      parsedLinks = [{ title: '', url: String(link).trim() }];
+    }
+    const primaryLink = parsedLinks.length > 0 ? parsedLinks[0].url : (link ? String(link).trim() : '');
 
     if (targetProfessionIds != null && (
       !Array.isArray(targetProfessionIds) ||
@@ -243,7 +268,8 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
       tags: Array.isArray(tags) ? tags : [],
       targetProfessionIds: normalizedTargetProfessionIds,
       videoType: videoType || 'yog',
-      link: link || '',
+      link: primaryLink,
+      links: parsedLinks,
       videoUrl: cloudflareR2Service.getPublicUrl(key),
       thumbnailUrl: isSubOnly 
         ? 'https://placehold.co/600x400/1e1e24/ffffff?text=Subscriber+Only+🔒' 

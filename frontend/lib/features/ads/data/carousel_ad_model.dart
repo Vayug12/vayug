@@ -1,4 +1,6 @@
 
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+
 class CarouselAdModel {
   final String id;
   final String campaignId;
@@ -7,6 +9,7 @@ class CarouselAdModel {
   final List<CarouselSlide> slides;
   final String callToActionLabel;
   final String callToActionUrl;
+  final List<LinkItemData> links;
   final bool isActive;
   final DateTime createdAt;
   final int impressions;
@@ -24,6 +27,7 @@ class CarouselAdModel {
     required this.slides,
     required this.callToActionLabel,
     required this.callToActionUrl,
+    this.links = const [],
     required this.isActive,
     required this.createdAt,
     this.impressions = 0,
@@ -46,6 +50,27 @@ class CarouselAdModel {
           [],
       callToActionLabel: json['callToActionLabel'] ?? 'Learn More',
       callToActionUrl: json['callToActionUrl'] ?? '',
+      links: () {
+        if (json['links'] is List) {
+          return (json['links'] as List).map((l) {
+            if (l is Map) {
+              return LinkItemData(
+                url: (l['url'] ?? l['link'] ?? '').toString().trim(),
+                title: (l['title'] ?? l['label'] ?? '').toString().trim(),
+              );
+            } else if (l is String) {
+              return LinkItemData(url: l.trim());
+            }
+            return const LinkItemData(url: '');
+          }).where((l) => l.url.isNotEmpty).toList();
+        }
+        final single = (json['callToActionUrl'] ?? json['link'] ?? json['url'] ?? '').toString().trim();
+        if (single.isNotEmpty) {
+          final label = (json['callToActionLabel'] ?? json['callToAction'] ?? '').toString().trim();
+          return [LinkItemData(url: single, title: label)];
+        }
+        return const <LinkItemData>[];
+      }(),
       isActive: json['isActive'] ?? false,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
@@ -71,6 +96,7 @@ class CarouselAdModel {
       'slides': slides.map((slide) => slide.toJson()).toList(),
       'callToActionLabel': callToActionLabel,
       'callToActionUrl': callToActionUrl,
+      'links': links.map((l) => {'title': l.title, 'url': l.url}).toList(),
       'isActive': isActive,
       'createdAt': createdAt.toIso8601String(),
       'impressions': impressions,
@@ -90,6 +116,7 @@ class CarouselAdModel {
     List<CarouselSlide>? slides,
     String? callToActionLabel,
     String? callToActionUrl,
+    List<LinkItemData>? links,
     bool? isActive,
     DateTime? createdAt,
     int? impressions,
@@ -107,6 +134,7 @@ class CarouselAdModel {
       slides: slides ?? this.slides,
       callToActionLabel: callToActionLabel ?? this.callToActionLabel,
       callToActionUrl: callToActionUrl ?? this.callToActionUrl,
+      links: links ?? this.links,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       impressions: impressions ?? this.impressions,

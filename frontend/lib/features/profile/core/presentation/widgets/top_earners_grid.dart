@@ -118,8 +118,15 @@ class _TopEarnersGridState extends State<TopEarnersGrid> {
     if (_isLoading) {
       return const Center(
         child: Padding(
-          padding: EdgeInsets.all(24.0),
-          child: CircularProgressIndicator(),
+          padding: EdgeInsets.symmetric(vertical: 48.0),
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.textTertiary,
+            ),
+          ),
         ),
       );
     }
@@ -127,27 +134,28 @@ class _TopEarnersGridState extends State<TopEarnersGrid> {
     if (_hasError) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 48.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 32),
-              const SizedBox(height: 8),
+              Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.textTertiary.withValues(alpha: 0.8),
+                size: 32,
+              ),
+              const SizedBox(height: 12),
               Text(
                 _errorMessage ?? 'Failed to load top creators',
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               AppButton(
                 onPressed: _loadTopCreators,
-                icon: const Icon(Icons.refresh, size: 18),
                 label: 'Retry',
-                variant: AppButtonVariant.text,
+                variant: AppButtonVariant.secondary,
               ),
             ],
           ),
@@ -156,21 +164,32 @@ class _TopEarnersGridState extends State<TopEarnersGrid> {
     }
 
     if (_topCreators.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 64.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.people_outline, size: 40, color: Colors.grey),
-              SizedBox(height: 8),
+              Icon(
+                Icons.people_outline_rounded,
+                size: 36,
+                color: AppColors.textTertiary.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 14),
               Text(
-                'No top creators yet',
-                style: TextStyle(
-                  fontSize: 14,
+                'No creators yet',
+                style: AppTypography.titleSmall.copyWith(
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF4B5563),
                 ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Creators you follow will appear here',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -178,16 +197,16 @@ class _TopEarnersGridState extends State<TopEarnersGrid> {
       );
     }
 
-    // LIST: Professional vertical list with horizontal items
+    // LIST: Clean Apple-style list prioritizing whitespace over borders & containers
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.spacing4,
-        vertical: AppSpacing.spacing4,
+        vertical: AppSpacing.spacing2,
       ),
       itemCount: _topCreators.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 4),
       itemBuilder: (context, index) {
         final creator = _topCreators[index];
         return _buildCreatorListItem(creator, index + 1);
@@ -200,157 +219,135 @@ class _TopEarnersGridState extends State<TopEarnersGrid> {
     final name = creator['name'] as String? ?? 'Unknown';
     final profilePic = creator['profilePic'] as String?;
     final score = (creator['totalEarnings'] as num?)?.toDouble() ?? 0.0;
+    final videoCount = (creator['videoCount'] as num?)?.toInt() ?? 0;
 
-    Color badgeColor;
-    if (rank == 1) {
-      badgeColor = const Color(0xFFFFD700); // gold
-    } else if (rank == 2) {
-      badgeColor = const Color(0xFFC0C0C0); // silver
-    } else if (rank == 3) {
-      badgeColor = const Color(0xFFCD7F32); // bronze
-    } else {
-      badgeColor = Colors.transparent;
+    String subtitleText = '';
+    if (videoCount > 0) {
+      subtitleText = '$videoCount ${videoCount == 1 ? 'video' : 'videos'}';
     }
 
-    return GestureDetector(
-      onTap: userId != null ? () => _navigateToUserProfile(userId) : null,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.backgroundSecondary.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(
-            color: AppColors.borderPrimary.withValues(alpha: 0.5),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            // Rank Number/Badge
-            Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: badgeColor != Colors.transparent 
-                    ? badgeColor 
-                    : AppColors.backgroundPrimary.withValues(alpha: 0.3),
-                shape: BoxShape.circle,
-                boxShadow: rank <= 3 ? [
-                  BoxShadow(
-                    color: badgeColor.withValues(alpha: 0.3),
-                    blurRadius: 4,
-                    spreadRadius: 1,
-                  )
-                ] : [],
-              ),
-              child: Text(
-                '$rank',
-                style: TextStyle(
-                  color: rank <= 3 ? AppColors.textInverse : AppColors.textPrimary,
-                  fontSize: AppTypography.fontSizeSM,
-                  fontWeight: AppTypography.weightBold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            
-            // Avatar
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.2), 
-                  width: 2,
-                ),
-              ),
-              child: ClipOval(
-                child: profilePic != null && profilePic.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: profilePic,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: AppColors.backgroundSecondary,
-                          child: const Icon(Icons.person, size: 24),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: AppColors.backgroundSecondary,
-                          child: const Icon(Icons.person, size: 24),
-                        ),
-                      )
-                    : Container(
-                        color: AppColors.backgroundSecondary,
-                        child: const Icon(Icons.person, size: 24),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            
-            // Name
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.fontSizeBase,
-                      fontWeight: AppTypography.weightSemiBold,
-                      color: AppColors.textPrimary,
-                    ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: userId != null ? () => _navigateToUserProfile(userId) : null,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        splashColor: Colors.white.withValues(alpha: 0.05),
+        highlightColor: Colors.white.withValues(alpha: 0.03),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          child: Row(
+            children: [
+              // Typographic Rank - Clean Apple style (no colored circle badge or shadows)
+              SizedBox(
+                width: 26,
+                child: Text(
+                  '$rank',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.titleMedium.copyWith(
+                    color: rank <= 3 ? AppColors.textPrimary : AppColors.textTertiary,
+                    fontWeight: rank <= 3 ? FontWeight.w700 : FontWeight.w500,
                   ),
-                  if (rank <= 3)
-                    Text(
-                      rank == 1 ? 'Top Creator' : 'Popular Creator',
-                      style: TextStyle(
-                        fontSize: AppTypography.fontSizeXS,
-                        color: AppColors.primary,
-                        fontWeight: AppTypography.weightMedium,
-                      ),
-                    ),
-                ],
+                ),
               ),
-            ),
-            
-            // Score
-            if (score > 0)
+              const SizedBox(width: 14),
+
+              // Clean Avatar with subtle hairline ring
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    width: 0.8,
+                  ),
                 ),
-                child: Row(
+                child: ClipOval(
+                  child: profilePic != null && profilePic.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: profilePic,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: AppColors.backgroundSecondary,
+                            child: const Icon(
+                              Icons.person_outline_rounded,
+                              size: 20,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: AppColors.backgroundSecondary,
+                            child: const Icon(
+                              Icons.person_outline_rounded,
+                              size: 20,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: AppColors.backgroundSecondary,
+                          child: const Icon(
+                            Icons.person_outline_rounded,
+                            size: 20,
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 14),
+
+              // Creator Name & Meta with spacious negative space
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.trending_up, size: 14, color: AppColors.success),
-                    const SizedBox(width: 4),
                     Text(
-                      _formatScore(score),
-                      style: TextStyle(
-                        fontSize: AppTypography.fontSizeSM,
-                        fontWeight: AppTypography.weightBold,
-                        color: AppColors.success,
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.titleSmall.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
                       ),
                     ),
+                    if (subtitleText.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitleText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textTertiary,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textTertiary,
-              size: 20,
-            ),
-          ],
+
+              // Minimal Score (if available) - calm typography without neon tags
+              if (score > 0) ...[
+                const SizedBox(width: 8),
+                Text(
+                  _formatScore(score),
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textTertiary.withValues(alpha: 0.35),
+                size: 18,
+              ),
+            ],
+          ),
         ),
       ),
     );

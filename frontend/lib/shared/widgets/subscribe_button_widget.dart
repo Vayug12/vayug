@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/radius.dart';
 import 'package:vayug/core/design/spacing.dart';
@@ -40,40 +41,51 @@ class SubscribeButtonWidget extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          constraints: const BoxConstraints(
-            minWidth: 96,
-            minHeight: 32,
+          constraints: BoxConstraints(
+            minHeight: 26.r,
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.spacing3,
+            horizontal: 10.r,
             vertical: AppSpacing.spacing1,
           ),
-          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isSubscribed
-                ? AppColors.backgroundTertiary
-                : AppColors.backgroundSecondary.withValues(alpha: 0.7),
+                ? AppColors.backgroundTertiary.withValues(alpha: 0.6)
+                : AppColors.backgroundSecondary.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: isSubscribed ? Colors.white12 : Colors.white24,
+              width: 0.8,
+            ),
           ),
-          child: isLoading
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
+          child: Row(
+            mainAxisSize: isFullWidth ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                const SizedBox(
+                  width: 12,
+                  height: 12,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2,
+                    strokeWidth: 1.5,
                     color: AppColors.white,
                   ),
                 )
-              : Text(
+              else
+                Text(
                   label,
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.labelMedium.copyWith(
                     color: AppColors.white,
-                    fontWeight: AppTypography.weightBold,
+                    fontWeight: AppTypography.weightSemiBold,
+                    fontSize: 11.5.sp,
+                    letterSpacing: 0.2,
                   ),
                 ),
+            ],
+          ),
         ),
       ),
     );

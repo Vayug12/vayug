@@ -191,7 +191,7 @@ class UnifiedVideoCard extends StatelessWidget {
                 ),
 
               // Series Badge
-              if (video.seriesId != null)
+              if (video.isMultiEpisodeSeries)
                 Positioned(
                   top: 8,
                   right: topTrailingWidget != null ? 36 : 8,

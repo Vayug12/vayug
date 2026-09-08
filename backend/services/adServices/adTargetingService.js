@@ -541,6 +541,7 @@ class AdTargetingService {
       adType: ad.adType,
       imageUrl: ad.thumbnail || ad.cloudinaryUrl,
       link: ad.callToAction?.url,
+      links: (ad.links && ad.links.length > 0) ? ad.links : (ad.callToAction?.url ? [{ title: ad.callToAction?.label || '', url: ad.callToAction.url }] : []),
       title: ad.title || ad.campaign?.name || 'Untitled Ad',
       description: ad.campaign?.description || '',
       callToAction: ad.callToAction?.label || 'Learn More',

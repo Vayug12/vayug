@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 
 class AdModel {
   final String id;
@@ -7,6 +8,7 @@ class AdModel {
   final String? imageUrl;
   final String? videoUrl;
   final String? link;
+  final List<LinkItemData> links;
   final String adType; // 'banner', 'interstitial', 'rewarded', 'native'
   final String status; // 'draft', 'active', 'paused', 'completed'
   final DateTime createdAt;
@@ -49,6 +51,7 @@ class AdModel {
     this.imageUrl,
     this.videoUrl,
     this.link,
+    this.links = const [],
     required this.adType,
     required this.status,
     required this.createdAt,
@@ -87,6 +90,23 @@ class AdModel {
   });
 
   factory AdModel.fromJson(Map<String, dynamic> json) {
+    final rawLinks = json['links'];
+    List<LinkItemData> parsedLinks = [];
+    if (rawLinks is List && rawLinks.isNotEmpty) {
+      parsedLinks = rawLinks.map((l) {
+        if (l is Map) {
+          return LinkItemData(
+            url: (l['url'] ?? '').toString(),
+            title: (l['title'] ?? '').toString(),
+          );
+        }
+        return LinkItemData(url: l.toString());
+      }).where((l) => l.url.trim().isNotEmpty).toList();
+    } else if (json['link'] != null &&
+        json['link'].toString().trim().isNotEmpty) {
+      parsedLinks = [LinkItemData(url: json['link'].toString().trim())];
+    }
+
     return AdModel(
       id: json['_id'] ?? json['id'] ?? '',
       title: json['title'] ?? '',
@@ -94,6 +114,7 @@ class AdModel {
       imageUrl: json['imageUrl'],
       videoUrl: json['videoUrl'],
       link: json['link'],
+      links: parsedLinks,
       adType: json['adType'] ?? 'banner',
       status: json['status'] ?? 'draft',
       createdAt: json['createdAt'] != null
@@ -143,6 +164,7 @@ class AdModel {
       'imageUrl': imageUrl,
       'videoUrl': videoUrl,
       'link': link,
+      'links': links.map((l) => {'title': l.title, 'url': l.url}).toList(),
       'adType': adType,
       'status': status,
       'createdAt': createdAt.toIso8601String(),
@@ -186,6 +208,7 @@ class AdModel {
     String? imageUrl,
     String? videoUrl,
     String? link,
+    List<LinkItemData>? links,
     String? adType,
     String? status,
     DateTime? createdAt,
@@ -229,6 +252,7 @@ class AdModel {
       imageUrl: imageUrl ?? this.imageUrl,
       videoUrl: videoUrl ?? this.videoUrl,
       link: link ?? this.link,
+      links: links ?? this.links,
       adType: adType ?? this.adType,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,

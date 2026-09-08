@@ -43,6 +43,7 @@ import 'package:vayug/shared/widgets/report_dialog_widget.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
 import 'package:vayug/core/providers/auth_providers.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:vayug/core/providers/navigation_providers.dart';
 import 'package:vayug/features/video/vayu/presentation/screens/vayu_player_gestures_mixin.dart';
@@ -1499,7 +1500,7 @@ class _VayuLongFormPlayerScreenState
   }
 
   void _showEpisodeList(BuildContext context, VideoModel video) {
-    if (video.episodes == null || video.episodes!.isEmpty) return;
+    if (video.episodes == null || video.episodes!.length <= 1) return;
     VayuBottomSheet.show<void>(
       context: context,
       title: 'Episodes',
@@ -2621,11 +2622,26 @@ class _VayuLongFormPlayerScreenState
               onShare: () => _showShareOptions(v),
               onSave: () => _handleToggleSave(index),
               onVisitLink: () async {
-                final enrichedUrl = UrlUtils.enrichUrl(_sanitizeUrl(v.link!),
-                    medium: 'long_form_player', campaign: 'creator_visit');
-                final u = Uri.parse(enrichedUrl);
-                if (await canLaunchUrl(u)) {
-                  launchUrl(u, mode: LaunchMode.externalApplication);
+                if (v.hasMultipleLinks) {
+                  LinksBottomSheet.show(
+                    context,
+                    links: v.validLinks
+                        .map((l) => LinkItemData(url: l.url, title: l.title))
+                        .toList(),
+                    medium: 'long_form_player',
+                    campaign: 'creator_visit',
+                  );
+                } else {
+                  final rawUrl = v.validLinks.isNotEmpty
+                      ? v.validLinks.first.url
+                      : (v.link ?? '');
+                  if (rawUrl.isEmpty) return;
+                  final enrichedUrl = UrlUtils.enrichUrl(_sanitizeUrl(rawUrl),
+                      medium: 'long_form_player', campaign: 'creator_visit');
+                  final u = Uri.parse(enrichedUrl);
+                  if (await canLaunchUrl(u)) {
+                    launchUrl(u, mode: LaunchMode.externalApplication);
+                  }
                 }
               },
               onMoreOptions: _showMoreOptions,

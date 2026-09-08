@@ -13,6 +13,7 @@ import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
 import 'package:vayug/shared/utils/url_utils.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 
 class VideoInfoWidget extends StatefulWidget {
   final VideoModel video;
@@ -93,11 +94,11 @@ class _VideoInfoWidgetState extends State<VideoInfoWidget> {
           // **DEBUG: Add logging to check link status**
           Builder(
             builder: (context) {
-              if (widget.video.link != null && widget.video.link!.isNotEmpty) {
+              if (widget.video.hasLink) {
                 return Column(
                   children: [
                     const SizedBox(height: 2),
-                    _VisitNowButton(link: widget.video.link!),
+                    _VisitNowButton(video: widget.video),
                   ],
                 );
               } else {
@@ -265,20 +266,37 @@ class _UploaderAvatar extends StatelessWidget {
 
 // Visit Now button widget
 class _VisitNowButton extends StatelessWidget {
-  final String link;
+  final VideoModel video;
 
-  const _VisitNowButton({required this.link});
+  const _VisitNowButton({required this.video});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      // **UPDATED: Increased width significantly while keeping height same**
-      width: MediaQuery.of(context).size.width * 0.75, // 60% of screen width
+      width: MediaQuery.of(context).size.width * 0.75,
       margin: const EdgeInsets.only(right: 8),
       child: AppButton(
         onPressed: () async {
+          final validLinks = video.validLinks;
+          if (validLinks.length > 1) {
+            LinksBottomSheet.show(
+              context,
+              title: video.videoName,
+              links: validLinks.map((l) => l.toLinkItemData()).toList(),
+              source: 'vayug',
+              medium: 'video_link',
+              campaign: 'creator_visit',
+            );
+            return;
+          }
+
+          final targetUrl = validLinks.isNotEmpty
+              ? validLinks.first.url
+              : (video.link?.trim() ?? '');
+          if (targetUrl.isEmpty) return;
+
           final enrichedUrl = UrlUtils.enrichUrl(
-            link,
+            targetUrl,
             medium: 'video_link',
             campaign: 'creator_visit',
           );
@@ -286,7 +304,7 @@ class _VisitNowButton extends StatelessWidget {
           if (await canLaunchUrl(uri)) {
             await launchUrl(uri, mode: LaunchMode.externalApplication);
           } else if (context.mounted) {
-            VayuSnackBar.showError(context, 'Could not open link: $link');
+            VayuSnackBar.showError(context, 'Could not open link: $targetUrl');
           }
         },
         icon: const Icon(Icons.open_in_new, size: 14),

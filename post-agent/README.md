@@ -44,21 +44,31 @@ node generate.js --platform substack --topic "building a creator-first video pla
 
 When no topic is provided, the selected AI provider automatically suggests a fresh project-relevant topic using the project context and previous post history. It then researches that topic on the web before writing the post.
 
-### Trending Topic Posts
+### Generic / Custom Posts (No App Context or Promotion)
 
-Generate posts based on trending news in specific categories:
+The `custom` command generates clean, unbranded generic posts with **no** Vayug/Snehayog context and **no** app promotion. You can generate based on trending category news, specific custom topics, or let it pick:
 
 ```powershell
+# Pick a trending category automatically and generate a generic post
+node generate.js custom
+
+# Generate from trending category news without any app promotion
 node generate.js custom AI
 node generate.js custom AI linkedin
 node generate.js custom technology x --provider opencode
 node generate.js custom startup reddit --count 3
-node generate.js custom "creator economy" --loop --count 3
+
+# Generate from your own custom topic (no Vayug context, purely generic)
+node generate.js custom "Why agentic workflows are the future of software"
+node generate.js custom "productivity tips for remote teams" linkedin --copy
 ```
 
 Available categories: `ai`, `technology`, `startup`, `indian startup`, `creator economy`, `digital marketing`, `fintech`, `edtech`, `saas`, `web3`, `sustainability`
 
-The `custom` keyword triggers trending mode - it searches for latest news in the specified category and creates content based on trending topics.
+When `custom` is used:
+- Project context files (`llm.txt`, `monetization.json`, etc.) are **not** loaded.
+- Web search queries do **not** search for Snehayog/Vayug.
+- Post generation and editor critique passes strictly disallow any app pitches or promotional mentions.
 
 Select a provider. If omitted, it is `opencode`:
 

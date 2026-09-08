@@ -2,7 +2,15 @@ import { spawn } from 'node:child_process';
 
 import { appendHistory, readHistory } from './history.js';
 import { loadProjectContext } from './context.js';
-import { buildCritiquePrompt, buildPrompt, buildTopicPrompt, buildTrendingPrompt, sampleTopicTerritory } from './prompt.js';
+import {
+  buildCritiquePrompt,
+  buildCustomPrompt,
+  buildGenericCritiquePrompt,
+  buildPrompt,
+  buildTopicPrompt,
+  buildTrendingPrompt,
+  sampleTopicTerritory,
+} from './prompt.js';
 import { generateWithProvider } from './providers.js';
 import { research } from './research.js';
 import { isCategory, researchTrending } from './trending.js';
@@ -17,21 +25,24 @@ import { saveOutput } from './output.js';
 
 const HELP = `Snehayog/Vayug Post Agent
 
-Single post:
+Single post (with Snehayog/Vayug context):
   node generate.js linkedin
   node generate.js linkedin "creator monetization"
   node generate.js --platform reddit --topic "video discovery"
   node generate.js x "short-form creator revenue" --provider codex --copy
 
-Trending topic post:
+Custom / Generic post (NO Vayug/Snehayog context or promotion):
+  node generate.js custom
   node generate.js custom AI
   node generate.js custom AI linkedin
+  node generate.js custom "productivity tips" linkedin
   node generate.js custom technology x --provider opencode
   node generate.js custom startup reddit --count 3
 
 Loop:
   node auto-generate.js --loop --count 10 --interval 50
   node auto-generate.js --platform all --provider opencode --count 4
+  node auto-generate.js custom AI --loop --count 5 --interval 60
 
 Options:
   --provider <name>   ${PROVIDERS.join(' | ')} (default: ${DEFAULT_PROVIDER})
@@ -58,19 +69,20 @@ function valueAfter(args, index, flag) {
   return value;
 }
 
-function parseArgs(argv, mode) {
+export function parseArgs(argv, mode = 'single') {
   const args = {
     mode,
     provider: DEFAULT_PROVIDER,
     platform: mode === 'single' ? 'linkedin' : 'all',
     topic: null,
-    count: mode === 'single' ? 1 : 1,
+    count: 1,
     loop: false,
     interval: 120,
     copy: false,
     critique: true,
     help: false,
     trending: false,
+    custom: false,
     category: null,
   };
   const positionals = [];
@@ -92,23 +104,48 @@ function parseArgs(argv, mode) {
 
   if (positionals[0]?.toLowerCase() === 'custom') {
     positionals.shift();
-    args.trending = true;
-    args.mode = 'trending';
+    args.custom = true;
+    args.mode = 'custom';
 
-    if (positionals.length > 0 && isCategory(positionals[0])) {
-      args.category = positionals.shift().toLowerCase();
-    } else if (positionals.length > 0 && !PLATFORMS.includes(positionals[0]) && positionals[0] !== 'all') {
-      args.category = positionals.shift().toLowerCase();
-    } else {
-      args.trending = false;
-      args.mode = 'single';
+    // Scan remaining positionals for platform, category, or topic
+    for (let i = 0; i < positionals.length; i++) {
+      const p = positionals[i];
+      const pLower = p.toLowerCase();
+      if (!args.category && isCategory(pLower)) {
+        args.category = pLower;
+        positionals.splice(i, 1);
+        i--;
+      } else if (PLATFORMS.includes(pLower) || pLower === 'all') {
+        args.platform = pLower;
+        positionals.splice(i, 1);
+        i--;
+      }
+    }
+
+    // Anything left over in positionals is a topic phrase
+    if (positionals.length > 0) {
+      args.topic = [args.topic, ...positionals].filter(Boolean).join(' ');
+      positionals.length = 0;
+    }
+
+    // If no topic and no category was specified, default to a trending category
+    if (!args.topic && !args.category) {
+      args.trending = true;
+      const categories = Object.keys(TRENDING_CATEGORIES);
+      args.category = categories[Math.floor(Math.random() * categories.length)];
+    } else if (args.category) {
+      args.trending = true;
+    }
+  } else {
+    // Normal Vayug post flow
+    if (positionals[0] && (PLATFORMS.includes(positionals[0]) || positionals[0] === 'all')) {
+      args.platform = positionals.shift();
+    }
+    if (positionals.length > 0) {
+      args.topic = [args.topic, ...positionals].filter(Boolean).join(' ');
     }
   }
 
-  if (positionals[0] && (PLATFORMS.includes(positionals[0]) || positionals[0] === 'all')) {
-    args.platform = positionals.shift();
-  }
-  if (positionals.length > 0) args.topic = [args.topic, ...positionals].filter(Boolean).join(' ');
   if (!PROVIDERS.includes(args.provider)) throw new Error(`unknown provider: ${args.provider}`);
   if (![...PLATFORMS, 'all'].includes(args.platform)) throw new Error(`unknown platform: ${args.platform}`);
   if (!Number.isInteger(args.count) || args.count < 1) throw new Error('--count must be a positive integer');
@@ -195,10 +232,13 @@ function stripFences(text) {
 
 // Second pass over the draft. A failure here must never cost us a good post,
 // so anything short of a non-empty revision falls back to the original.
-async function critique({ platform, topic, context, post, provider }) {
+async function critique({ platform, topic, context, post, provider, isCustom = false }) {
   try {
+    const prompt = isCustom
+      ? buildGenericCritiquePrompt({ platform, topic, post })
+      : buildCritiquePrompt({ platform, topic, context, post });
     const revised = stripFences(
-      await generateWithProvider(buildCritiquePrompt({ platform, topic, context, post }), provider),
+      await generateWithProvider(prompt, provider),
     );
     if (!revised) {
       console.log('  editor pass returned nothing; keeping the original draft');
@@ -227,7 +267,7 @@ async function generateOne(args, index, state) {
   const draft = stripFences(await generateWithProvider(prompt, args.provider));
   if (!draft) throw new Error(`${args.provider} returned an empty post`);
   const post = args.critique
-    ? await critique({ platform, topic, context: state.context, post: draft, provider: args.provider })
+    ? await critique({ platform, topic, context: state.context, post: draft, provider: args.provider, isCustom: false })
     : draft;
   const directory = await saveOutput({ platform, topic, provider: args.provider, post, research: webResearch, context: state.context });
   const entry = { createdAt: new Date().toISOString(), platform, topic, provider: args.provider, directory };
@@ -248,7 +288,7 @@ async function generateTrending(args, index, state) {
   const trending = await researchTrending(args.category);
   console.log(`  found trending topic: "${trending.topic}"`);
 
-  const webResearch = await research({ topic: trending.topic, projectName: 'Snehayog/Vayug' });
+  const webResearch = await research({ topic: trending.topic, projectName: args.custom ? null : 'Snehayog/Vayug' });
   const prompt = buildTrendingPrompt({
     platform,
     category: trending.category,
@@ -258,11 +298,19 @@ async function generateTrending(args, index, state) {
     context: state.context,
     research: webResearch,
     history: state.history,
+    isCustom: Boolean(args.custom),
   });
   const draft = stripFences(await generateWithProvider(prompt, args.provider));
   if (!draft) throw new Error(`${args.provider} returned an empty post`);
   const post = args.critique
-    ? await critique({ platform, topic: trending.topic, context: { text: '' }, post: draft, provider: args.provider })
+    ? await critique({
+        platform,
+        topic: trending.topic,
+        context: state.context,
+        post: draft,
+        provider: args.provider,
+        isCustom: Boolean(args.custom),
+      })
     : draft;
   const directory = await saveOutput({
     platform,
@@ -282,9 +330,51 @@ async function generateTrending(args, index, state) {
   }
 }
 
+async function generateCustomTopic(args, index, state) {
+  const platform = choosePlatform(args.platform, index);
+  const topic = args.topic;
+  console.log(`\n[${index + 1}] researching custom topic "${topic}" for ${platform} (${args.provider})...`);
+
+  const webResearch = await research({ topic, projectName: null });
+  const prompt = buildCustomPrompt({
+    platform,
+    topic,
+    research: webResearch,
+    history: state.history,
+  });
+  const draft = stripFences(await generateWithProvider(prompt, args.provider));
+  if (!draft) throw new Error(`${args.provider} returned an empty post`);
+  const post = args.critique
+    ? await critique({
+        platform,
+        topic,
+        context: { text: '', files: [] },
+        post: draft,
+        provider: args.provider,
+        isCustom: true,
+      })
+    : draft;
+  const directory = await saveOutput({
+    platform,
+    topic,
+    provider: args.provider,
+    post,
+    research: webResearch,
+    context: state.context,
+  });
+  const entry = { createdAt: new Date().toISOString(), platform, topic, provider: args.provider, directory };
+  await appendHistory(entry);
+  state.history.push(entry);
+  console.log(`\n${post}\n\nSaved: ${directory}`);
+  if (args.copy) {
+    await copyToClipboard(post);
+    console.log('Copied post to clipboard.');
+  }
+}
+
 export async function runCli(mode) {
   if (mode === 'context') {
-  const context = args.trending ? { text: '' } : await loadProjectContext();
+    const context = await loadProjectContext();
     console.log(`Project root: ${context.projectRoot}\nFiles: ${context.files.join(', ')}`);
     return;
   }
@@ -293,11 +383,17 @@ export async function runCli(mode) {
     console.log(HELP);
     return;
   }
-  const context = args.trending ? { text: '' } : await loadProjectContext();
+  const context = args.custom ? { text: '', files: [] } : await loadProjectContext();
   const state = { context, history: await readHistory() };
-  const total = args.loop ? args.count : args.count;
+  const total = args.count;
 
-  if (args.trending) {
+  if (args.custom) {
+    if (args.trending) {
+      console.log(`Post Agent | mode: custom (trending) | category: ${args.category} | provider: ${args.provider} | platform: ${args.platform}`);
+    } else {
+      console.log(`Post Agent | mode: custom (generic) | topic: ${args.topic} | provider: ${args.provider} | platform: ${args.platform}`);
+    }
+  } else if (args.trending) {
     console.log(`Post Agent | mode: trending | category: ${args.category} | provider: ${args.provider} | platform: ${args.platform}`);
   } else {
     console.log(`Post Agent | provider: ${args.provider} | platform: ${args.platform} | search: enabled`);
@@ -307,7 +403,9 @@ export async function runCli(mode) {
   let attempts = 0;
   while (generated < total) {
     try {
-      if (args.trending) {
+      if (args.custom && !args.trending && args.topic) {
+        await generateCustomTopic(args, attempts, state);
+      } else if (args.trending) {
         await generateTrending(args, attempts, state);
       } else {
         await generateOne(args, attempts, state);

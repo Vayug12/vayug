@@ -138,16 +138,78 @@ void main() {
       expect(untouched.seriesId, isNull);
     });
 
-    test('should handle video not found in list gracefully', () {
-      // ACT: Try to update a video that doesn't exist
-      // Should not throw
-      expect(
-        () => videoManager.updateVideoInList('nonexistent_video', {
-          'videoName': 'Ghost',
-          'seriesId': 'series_999',
-        }),
-        returnsNormally,
+    test('should properly unlink series when seriesId and episodes are set to null', () async {
+      final seriesVideo = testVideo.copyWith(
+        seriesId: 'series_123',
+        episodes: [
+          {'id': 'video_1', 'videoName': 'Video 1'},
+          {'id': 'video_2', 'videoName': 'Video 2'},
+        ],
       );
+
+      when(() => mockVideoService.getUserVideos(
+            any(),
+            forceRefresh: any(named: 'forceRefresh'),
+            page: any(named: 'page'),
+            limit: any(named: 'limit'),
+          )).thenAnswer((_) async => [seriesVideo]);
+
+      await videoManager.loadUserVideos('user_1');
+      expect(videoManager.userVideos.first.isMultiEpisodeSeries, isTrue);
+
+      // ACT: Unlink series via updateVideoInList with nulls
+      videoManager.updateVideoInList('video_1', {
+        'seriesId': null,
+        'episodes': null,
+      });
+
+      // ASSERT: Video should be unlinked and no longer a multi-episode series
+      final unlinked = videoManager.userVideos.first;
+      expect(unlinked.seriesId, isNull);
+      expect(unlinked.episodes, isNull);
+      expect(unlinked.isMultiEpisodeSeries, isFalse);
+    });
+
+    test('should prune episodes from remaining video and dissolve series when sibling video is deleted', () async {
+      final ep1 = testVideo.copyWith(
+        id: 'ep_1',
+        seriesId: 'series_abc',
+        episodes: [
+          {'id': 'ep_1', 'videoName': 'Episode 1'},
+          {'id': 'ep_2', 'videoName': 'Episode 2'},
+        ],
+      );
+      final ep2 = testVideo.copyWith(
+        id: 'ep_2',
+        seriesId: 'series_abc',
+        episodes: [
+          {'id': 'ep_1', 'videoName': 'Episode 1'},
+          {'id': 'ep_2', 'videoName': 'Episode 2'},
+        ],
+      );
+
+      when(() => mockVideoService.getUserVideos(
+            any(),
+            forceRefresh: any(named: 'forceRefresh'),
+            page: any(named: 'page'),
+            limit: any(named: 'limit'),
+          )).thenAnswer((_) async => [ep1, ep2]);
+      when(() => mockVideoService.deleteVideos(any())).thenAnswer((_) async => 1);
+      when(() => mockCacheManager.invalidateVideoCache()).thenAnswer((_) async {});
+
+      await videoManager.loadUserVideos('user_1');
+      expect(videoManager.userVideos, hasLength(2));
+
+      // ACT: Delete ep_2
+      await videoManager.deleteSingleVideo('ep_2');
+
+      // ASSERT: ep_1 remains, its episodes array is pruned, and since only 1 remained, series is dissolved
+      expect(videoManager.userVideos, hasLength(1));
+      final surviving = videoManager.userVideos.first;
+      expect(surviving.id, equals('ep_1'));
+      expect(surviving.seriesId, isNull);
+      expect(surviving.episodes, isNull);
+      expect(surviving.isMultiEpisodeSeries, isFalse);
     });
   });
 }

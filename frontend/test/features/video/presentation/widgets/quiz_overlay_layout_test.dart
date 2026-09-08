@@ -305,6 +305,43 @@ void main() {
           reason:
               "Visit Now button must shrink to compact size when video is paused to avoid overlapping sidebar actions!");
     });
+
+    testWidgets(
+        'Regression Guard: Visit Now button right margin shrinks to 80px when video is playing but action buttons are visible',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ScreenUtilInit(
+          designSize: const Size(360, 690),
+          builder: (context, child) => MaterialApp(
+            home: Scaffold(
+              body: MockVideoOverlay(
+                isQuizVisible: false,
+                isPlaying: true, // Playing!
+                areActionButtonsVisible: true, // Action buttons visible!
+                visitNowButton: AppButton(
+                  label: 'Visit Now',
+                  onPressed: () {},
+                  variant: AppButtonVariant.secondary,
+                  size: AppButtonSize.small,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      final buttonFinder = find.byType(AppButton);
+      expect(buttonFinder, findsOneWidget);
+
+      final double buttonWidth = tester.getSize(buttonFinder).width;
+      final double screenWidth = tester.getSize(find.byType(Scaffold)).width;
+      final double expectedWidth = screenWidth - 16.0 - 80.0;
+      expect(buttonWidth, equals(expectedWidth),
+          reason:
+              "Visit Now button must shrink to compact size when action buttons are visible to avoid overlapping sidebar actions!");
+    });
   });
 }
 
@@ -313,12 +350,14 @@ void main() {
 class MockVideoOverlay extends StatelessWidget {
   final bool isQuizVisible;
   final bool isPlaying;
+  final bool areActionButtonsVisible;
   final Widget visitNowButton;
 
   const MockVideoOverlay({
     super.key,
     required this.isQuizVisible,
     required this.isPlaying,
+    this.areActionButtonsVisible = false,
     required this.visitNowButton,
   });
 
@@ -327,7 +366,7 @@ class MockVideoOverlay extends StatelessWidget {
     // -------------------------------------------------------------
     // 🟢 CORRECT PRODUCTION LOGIC:
     // -------------------------------------------------------------
-    final bool isCompact = !isPlaying;
+    final bool isCompact = !isPlaying || areActionButtonsVisible;
 
     // When isCompact is false, targetRight is 16.0 (full width).
     // When isCompact is true, targetRight is 80.0 (compact size).

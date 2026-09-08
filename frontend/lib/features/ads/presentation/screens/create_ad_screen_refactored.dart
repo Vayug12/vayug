@@ -32,6 +32,7 @@ import 'package:vayug/features/ads/presentation/widgets/create_ad/wallet_balance
 import 'package:vayug/features/ads/data/services/wallet_service.dart';
 import 'package:vayug/features/ads/data/wallet_model.dart';
 import 'package:vayug/features/ads/presentation/widgets/wallet/top_up_sheet.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 
 /// Mirrors `AD_CONFIG.MIN_TOTAL_BUDGET` on the server.
 ///
@@ -64,6 +65,7 @@ class _CreateAdScreenRefactoredState
   File? _selectedImage;
   File? _selectedVideo;
   final List<File> _selectedImages = [];
+  List<LinkItemData> _additionalLinks = [];
 
   // Campaign settings
   DateTime? _startDate;
@@ -833,6 +835,10 @@ class _CreateAdScreenRefactoredState
                 titleError: _titleError,
                 descriptionError: _descriptionError,
                 linkError: _linkError,
+                additionalLinks: _additionalLinks,
+                onAdditionalLinksChanged: (links) {
+                  setState(() => _additionalLinks = links);
+                },
               ),
               const SizedBox(height: 24),
               AppButton(
@@ -1626,6 +1632,11 @@ class _CreateAdScreenRefactoredState
             imageUrl: _getImageUrl(mediaUrls),
             videoUrl: _selectedVideo != null ? mediaUrls.first : null,
             link: _linkController.text.trim(),
+            links: _additionalLinks.isNotEmpty
+                ? _additionalLinks
+                    .map((l) => {'title': l.title, 'url': l.url})
+                    .toList()
+                : null,
             adType: _selectedAdType,
             budget: double.parse(_budgetController.text.trim()),
             targetAudience: _targetAudienceController.text.trim(),

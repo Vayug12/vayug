@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-/// Custom scroll physics for short-form video feeds (Instagram Reels / TikTok feel).
 ///
 /// Features & Guarantees:
 /// 1. Exactly ONE video scroll per swipe (never skips multiple videos).

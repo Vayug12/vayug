@@ -274,6 +274,24 @@ export const buildAdSpec = (body, { googleId, userObjectId }) => {
   }
 
   const link = normaliseLink(body.link);
+  let parsedLinks = [];
+  if (Array.isArray(body.links)) {
+    parsedLinks = body.links.map(l => {
+      if (typeof l === 'string' && l.trim()) {
+        const u = normaliseLink(l);
+        return u ? { title: '', url: u } : null;
+      }
+      if (l && typeof l === 'object' && (l.url || l.link)) {
+        const u = normaliseLink(l.url || l.link);
+        return u ? { title: trimmed(l.title || l.label), url: u } : null;
+      }
+      return null;
+    }).filter(Boolean);
+  }
+  if (parsedLinks.length === 0 && link) {
+    parsedLinks = [{ title: '', url: link }];
+  }
+  const primaryLink = parsedLinks.length > 0 ? parsedLinks[0].url : (link || '');
 
   // --- Pricing -----------------------------------------------------------
   // CPM is server-owned and must equal what adStatsBuffer charges per delivered
@@ -335,10 +353,11 @@ export const buildAdSpec = (body, { googleId, userObjectId }) => {
       label: enumOr(
         trimmed(body.callToActionLabel),
         ['Learn More', 'Shop Now', 'Download', 'Sign Up', 'Get Started', 'Watch More'],
-        callToActionLabelFor(link)
+        callToActionLabelFor(primaryLink)
       ),
-      url: link
+      url: primaryLink
     },
+    links: parsedLinks,
     // Auto-approved: credits cost real money, so the spam economics already
     // work against an attacker. The backstop is the admin reject endpoint,
     // which pulls the creative and refunds the remaining budget.

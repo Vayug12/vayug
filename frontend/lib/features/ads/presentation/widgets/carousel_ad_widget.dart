@@ -8,7 +8,9 @@ import 'package:vayug/features/ads/data/services/carousel_ad_service.dart';
 import 'package:vayug/features/ads/data/services/ad_impression_service.dart';
 import 'package:vayug/features/auth/data/services/authservices.dart';
 // import 'package:vayug/features/video/core/data/services/video_service.dart'; // Unused import removed
-// import 'package:url_launcher/url_launcher.dart'; // Unused import removed
+import 'package:url_launcher/url_launcher.dart';
+import 'package:vayug/shared/utils/url_utils.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 import 'package:vayug/shared/services/share_service.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/typography.dart';
@@ -31,7 +33,7 @@ class CarouselAdWidget extends StatefulWidget {
     required this.carouselAd,
     this.onAdClosed,
     this.autoPlay = true,
-    this.videoId, // **NEW: Optional videoId for view tracking**
+    this.videoId,
     this.onVideoPause,
     this.onVideoResume,
   }) : super(key: key);
@@ -255,6 +257,33 @@ class _CarouselAdWidgetState extends State<CarouselAdWidget>
 
   void _onAdTap() async {
     _trackClick();
+
+    if (widget.carouselAd.links.length > 1) {
+      LinksBottomSheet.show(
+        context,
+        title: widget.carouselAd.advertiserName.isNotEmpty
+            ? widget.carouselAd.advertiserName
+            : 'Sponsored Links',
+        links: widget.carouselAd.links,
+        medium: 'carousel_ad',
+        campaign: 'vayug_ads',
+        onLinkTapped: (item) async {
+          _trackClick();
+          final enriched = UrlUtils.enrichUrl(
+            item.url,
+            source: 'vayug',
+            medium: 'carousel_ad',
+            campaign: 'vayug_ads',
+          );
+          final uri = Uri.tryParse(enriched);
+          if (uri != null && await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        },
+      );
+      widget.onAdClosed?.call();
+      return;
+    }
 
     // Launch CTA URL if available
     String ctaUrl = widget.carouselAd.callToActionUrl;

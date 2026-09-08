@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vayug/core/design/colors.dart';
+import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+import 'package:vayug/features/ads/presentation/widgets/create_ad/ad_multi_link_field.dart';
 
 /// **AdDetailsFormWidget - Handles ad title, description, and link input**
 /// For banner ads, only shows link field (title/description not needed)
@@ -19,6 +21,10 @@ class AdDetailsFormWidget extends StatelessWidget {
   final String? descriptionError;
   final String? linkError;
 
+  // **Multi-Link Support**
+  final List<LinkItemData>? additionalLinks;
+  final ValueChanged<List<LinkItemData>>? onAdditionalLinksChanged;
+
   const AdDetailsFormWidget({
     Key? key,
     required this.titleController,
@@ -34,6 +40,8 @@ class AdDetailsFormWidget extends StatelessWidget {
     this.titleError,
     this.descriptionError,
     this.linkError,
+    this.additionalLinks,
+    this.onAdditionalLinksChanged,
   }) : super(key: key);
 
   @override
@@ -182,6 +190,13 @@ class AdDetailsFormWidget extends StatelessWidget {
             onFieldChanged?.call('link');
           },
         ),
+        if (onAdditionalLinksChanged != null) ...[
+          const SizedBox(height: 16),
+          AdMultiLinkField(
+            links: additionalLinks ?? const [],
+            onLinksChanged: onAdditionalLinksChanged!,
+          ),
+        ],
       ],
     );
   }

@@ -128,6 +128,10 @@ const videoSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  links: [{
+    title: { type: String, trim: true, default: '' },
+    url: { type: String, trim: true, required: true }
+  }],
   
   // **NEW: Quality URLs for adaptive streaming**
   preloadQualityUrl: {

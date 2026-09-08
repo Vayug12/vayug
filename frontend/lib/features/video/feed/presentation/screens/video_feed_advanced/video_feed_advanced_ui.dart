@@ -1813,9 +1813,8 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                                               ),
                                       ),
                                     ),
-                                    AppSpacing.hSpace4 /* closest */,
+                                    AppSpacing.hSpace4,
                                     Flexible(
-                                      fit: FlexFit.tight,
                                       child: GestureDetector(
                                         onTap: () =>
                                             _navigateToCreatorProfile(video),
@@ -1832,7 +1831,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                                         ),
                                       ),
                                     ),
-                                    AppSpacing.hSpace4 /* closest */,
+                                    AppSpacing.hSpace8,
                                     Consumer(
                                       builder: (context, ref, _) {
                                         final bool isFollowing = ref
@@ -1893,7 +1892,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                       onTap: () => _handleShare(video),
                     ),
                     AppSpacing.vSpace12,
-                    if (video.episodes != null && video.episodes!.isNotEmpty)
+                    if (video.episodes != null && video.episodes!.length > 1)
                       _buildVerticalActionButton(
                         icon: Icons.playlist_play_rounded,
                         onTap: () => _showEpisodeList(context, video),
@@ -1908,7 +1907,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
         );
 
         // **VISIT NOW PROTECTION: Always show button if it exists, even if overlay hides**
-        final visitNowButton = (video.link?.isNotEmpty == true)
+        final visitNowButton = video.hasLink
             ? Padding(
                 padding: EdgeInsets.only(
                   left: 16,
@@ -2480,7 +2479,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
   }
 
   void _showEpisodeList(BuildContext context, VideoModel video) {
-    if (video.episodes == null || video.episodes!.isEmpty) return;
+    if (video.episodes == null || video.episodes!.length <= 1) return;
 
     VayuBottomSheet.show(
       context: context,
@@ -2558,6 +2557,9 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                       _videos[index] = _videos[index].copyWith(
                         videoName: result['videoName'],
                         link: result['link'],
+                        links: result['links'] is List<VideoLink>
+                            ? result['links'] as List<VideoLink>
+                            : null,
                         tags: result['tags'],
                         quizzes: result['quizzes'],
                         seriesId: result['seriesId'],
@@ -2845,8 +2847,10 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
                     ),
                   );
 
-                  // Compact state when video is paused (to prevent overlapping the vertical actions bar on the right side)
-                  final bool isCompact = !isPlaying;
+                  // Compact state when action buttons are visible or video is paused
+                  // (to prevent overlapping the vertical actions bar on the right side)
+                  final bool areActionButtonsVisible = shouldShow;
+                  final bool isCompact = !isPlaying || areActionButtonsVisible;
 
                   final double targetBottom = isQuizVisible
                       ? widget.bottomPadding + (isCompact ? 10.0 : 20.0)
@@ -2869,7 +2873,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (widget.video.link?.isNotEmpty == true)
+                            if (widget.video.hasLink)
                               AppButton(
                                 label: 'Visit Now',
                                 onPressed: widget.onVisitNow,

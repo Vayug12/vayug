@@ -1,5 +1,29 @@
 # Vayug - Video Sharing Platform
 
+## Core Engineering Constraints
+
+Follow these constraints:
+1. **STRICT PRIVACY / NO SENSITIVE ACCESS**: Never read, open, view, grep, cat, search, or expose `.env` files (`.env`, `.env.*`) or private credentials/keys. All `.env` and private files are confidential and strictly off-limits.
+2. Max 250 lines per file — extract sub-widgets/components into separate files.
+3. Clean snake_case naming, no backup files, and modular clean architecture.
+4. Pehle root cause aur plan explain karo, blindly code dump mat karna.
+
+## Security & Privacy Constraints (MANDATORY FOR ALL CODING AGENTS)
+
+> [!CAUTION]
+> ### 🛑 STRICT CONFIDENTIALITY & PRIVATE FILES POLICY
+> Under NO circumstances should any AI coding agent, assistant, subagent, or tool inspect, read, search, or expose private files or environment secrets.
+>
+> 1. **DO NOT READ `.env` FILES**:
+>    - Never read, open, view, grep, cat, or search any `.env` file (including `.env`, `.env.local`, `.env.development`, `.env.production`, `.env.*`).
+>    - These files contain strictly confidential production and development credentials and secrets.
+> 2. **DO NOT READ PRIVATE / SECRET FILES**:
+>    - Do not read, view, or expose private keys, certificates, keystores, or credential files (e.g., `*.pem`, `*.key`, `key.properties`, `google-services.xml`, `GoogleService-Info.plist`, `*.tfvars`, `*.tfstate*`, etc.).
+> 3. **NO LEAKAGE / NO EXPOSURE**:
+>    - Never print, summarize, quote, commit, or log secret values, credentials, or private configuration contents in code, chat responses, commit messages, or artifacts.
+> 4. **WHAT TO DO INSTEAD**:
+>    - If an environment variable name or configuration schema is required, refer to documentation, sample files (e.g., `.env.example`), or ask the user directly. Never inspect the actual private `.env` file.
+
 ## Project Overview
 
 Vayug is a short-form video sharing platform built with Flutter (frontend) and Node.js/Express (backend). The platform features TikTok-style video feeds, creator monetization, ad management, and advanced video processing capabilities.

@@ -127,6 +127,18 @@ const AdCreativeSchema = new mongoose.Schema({
       }
     }
   },
+  links: [{
+    title: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    url: {
+      type: String,
+      trim: true,
+      required: true
+    }
+  }],
   reviewStatus: {
     type: String,
     required: true,

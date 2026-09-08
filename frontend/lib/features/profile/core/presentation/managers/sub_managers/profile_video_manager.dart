@@ -233,8 +233,32 @@ class ProfileVideoManager extends ChangeNotifier {
 
   void removeVideo(String videoId) {
     _userVideos.removeWhere((v) => v.id == videoId);
+    _pruneEpisodesAfterDeletion({videoId});
     if (!_userVideos.any(_isVideoStillProcessing)) _stopProcessingStatusPolling();
     notifyListenersSafe();
+  }
+
+  void _pruneEpisodesAfterDeletion(Set<String> deletedIds) {
+    for (var i = 0; i < _userVideos.length; i++) {
+      final v = _userVideos[i];
+      if (v.episodes != null && v.episodes!.isNotEmpty) {
+        final filteredEpisodes = v.episodes!
+            .where((ep) => !deletedIds.contains((ep['id'] ?? ep['_id'])?.toString()))
+            .toList();
+
+        if (filteredEpisodes.length <= 1) {
+          // No longer a multi-episode series! Unlink in local state
+          _userVideos[i] = v.copyWith(
+            clearSeriesId: true,
+            clearEpisodes: true,
+          );
+        } else if (filteredEpisodes.length != v.episodes!.length) {
+          _userVideos[i] = v.copyWith(
+            episodes: filteredEpisodes,
+          );
+        }
+      }
+    }
   }
 
   Future<bool> deleteSingleVideo(String videoId) async {
@@ -245,6 +269,7 @@ class ProfileVideoManager extends ChangeNotifier {
       if (success > 0) {
         removeVideo(videoId);
         _totalVideoCount--;
+        await _smartCacheManager.invalidateVideoCache();
         return true;
       }
       return false;
@@ -259,10 +284,12 @@ class ProfileVideoManager extends ChangeNotifier {
 
   Future<void> deleteSelectedVideos() async {
     if (_selectedVideoIds.isEmpty) return;
+    final idsToDelete = Set<String>.from(_selectedVideoIds);
     try {
-      final count = await _videoService.deleteVideos(_selectedVideoIds.toList());
+      final count = await _videoService.deleteVideos(idsToDelete.toList());
       if (count > 0) {
-        _userVideos.removeWhere((v) => _selectedVideoIds.contains(v.id));
+        _userVideos.removeWhere((v) => idsToDelete.contains(v.id));
+        _pruneEpisodesAfterDeletion(idsToDelete);
         _selectedVideoIds.clear();
         _totalVideoCount -= count;
         _isSelecting = false;
@@ -272,6 +299,7 @@ class ProfileVideoManager extends ChangeNotifier {
       notifyListenersSafe();
     }
   }
+
   /// Updates a specific video in the list with data returned from EditVideoDetails.
   /// Called when Navigator.pop returns updated video/series data.
   void updateVideoInList(String videoId, Map<String, dynamic> updatedData) {
@@ -279,30 +307,30 @@ class ProfileVideoManager extends ChangeNotifier {
     if (index == -1) return;
 
     final old = _userVideos[index];
-    _userVideos[index] = VideoModel(
-      id: old.id,
+    final bool hasSeriesKey = updatedData.containsKey('seriesId');
+    final String? newSeriesId = hasSeriesKey ? updatedData['seriesId'] as String? : old.seriesId;
+    final bool shouldClearSeriesId = hasSeriesKey && (newSeriesId == null || newSeriesId.isEmpty);
+
+    final bool hasEpisodesKey = updatedData.containsKey('episodes');
+    final rawEpisodes = updatedData['episodes'];
+    final List<Map<String, dynamic>>? parsedEpisodes = (rawEpisodes is List)
+        ? rawEpisodes.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+        : null;
+    final bool shouldClearEpisodes = hasEpisodesKey && (parsedEpisodes == null || parsedEpisodes.length <= 1);
+
+    _userVideos[index] = old.copyWith(
       videoName: updatedData['videoName'] as String? ?? old.videoName,
-      videoUrl: old.videoUrl,
-      thumbnailUrl: old.thumbnailUrl,
-      likes: old.likes,
-      views: old.views,
-      shares: old.shares,
-      uploadedAt: old.uploadedAt,
-      uploader: old.uploader,
-      likedBy: old.likedBy,
-      videoType: old.videoType,
-      aspectRatio: old.aspectRatio,
-      duration: old.duration,
-      seriesId: updatedData['seriesId'] as String? ?? old.seriesId,
-      episodes: updatedData['episodes'] != null
-          ? (updatedData['episodes'] as List)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList()
-          : old.episodes,
-      link: updatedData['link'] as String? ?? old.link,
-      tags: updatedData['tags'] != null
+      link: updatedData.containsKey('link') ? updatedData['link'] as String? : old.link,
+      links: updatedData.containsKey('links') && updatedData['links'] is List<VideoLink>
+          ? updatedData['links'] as List<VideoLink>
+          : old.links,
+      tags: updatedData.containsKey('tags') && updatedData['tags'] is List
           ? (updatedData['tags'] as List).map((e) => e.toString()).toList()
           : old.tags,
+      seriesId: shouldClearSeriesId ? null : newSeriesId,
+      clearSeriesId: shouldClearSeriesId,
+      episodes: shouldClearEpisodes ? null : parsedEpisodes,
+      clearEpisodes: shouldClearEpisodes,
     );
     notifyListenersSafe();
   }

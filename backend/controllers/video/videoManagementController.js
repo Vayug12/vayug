@@ -16,7 +16,7 @@ export const updateVideo = async (req, res) => {
   try {
     const videoId = req.params.id;
     const googleId = req.user.googleId;
-    const { videoName, link, tags, seriesId, episodeNumber, quizzes, thumbnailKey } = req.body;
+    const { videoName, link, links, tags, seriesId, episodeNumber, quizzes, thumbnailKey } = req.body;
 
     if (!videoName || videoName.trim() === '') {
       return res.status(400).json({ error: 'Video name is required' });
@@ -36,7 +36,21 @@ export const updateVideo = async (req, res) => {
     }
 
     video.videoName = videoName.trim();
-    if (link !== undefined) video.link = link.trim();
+    if (links !== undefined) {
+      let parsedLinks = [];
+      if (Array.isArray(links)) {
+        parsedLinks = links.map(l => {
+          if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
+          if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+          return null;
+        }).filter(Boolean);
+      }
+      video.links = parsedLinks;
+      video.link = parsedLinks.length > 0 ? parsedLinks[0].url : '';
+    } else if (link !== undefined) {
+      video.link = link.trim();
+      video.links = link.trim() ? [{ title: '', url: link.trim() }] : [];
+    }
     if (seriesId !== undefined) video.seriesId = seriesId;
     if (episodeNumber !== undefined) video.episodeNumber = parseInt(episodeNumber) || 0;
 
@@ -212,6 +226,49 @@ export const updateVideoSeries = async (req, res) => {
 };
 
 /**
+ * Clean up and cascade series metadata when video(s) belonging to a series are deleted.
+ * - If 0 videos remain in the series: nothing to do.
+ * - If 1 video remains: automatically unlink it (seriesId = null, episodeNumber = 0).
+ * - If 2+ videos remain: re-sequence episodeNumbers (1, 2, 3...).
+ * Returns an array of affected sibling video ID strings (for cache invalidation).
+ */
+const cascadeSeriesCleanup = async (seriesIds) => {
+  const affectedSiblingIds = [];
+  if (!seriesIds || seriesIds.length === 0) return affectedSiblingIds;
+
+  for (const sId of seriesIds) {
+    if (!sId) continue;
+    try {
+      const remaining = await Video.find({ seriesId: sId })
+        .sort({ episodeNumber: 1, createdAt: 1 })
+        .select('_id episodeNumber');
+
+      if (remaining.length === 1) {
+        const survivor = remaining[0];
+        await Video.updateOne(
+          { _id: survivor._id },
+          { $set: { seriesId: null, episodeNumber: 0, updatedAt: new Date() } }
+        );
+        affectedSiblingIds.push(survivor._id.toString());
+      } else if (remaining.length > 1) {
+        const bulkOps = remaining.map((vid, idx) => ({
+          updateOne: {
+            filter: { _id: vid._id },
+            update: { $set: { episodeNumber: idx + 1, updatedAt: new Date() } }
+          }
+        }));
+        await Video.bulkWrite(bulkOps);
+        remaining.forEach(v => affectedSiblingIds.push(v._id.toString()));
+      }
+    } catch (err) {
+      console.error(`⚠️ Error cascading series cleanup for seriesId ${sId}:`, err);
+    }
+  }
+
+  return affectedSiblingIds;
+};
+
+/**
  * Video Deletion Controllers
  */
 export const deleteVideo = async (req, res) => {
@@ -229,20 +286,34 @@ export const deleteVideo = async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to delete this video' });
     }
 
+    const seriesId = video.seriesId;
+
     await Video.findByIdAndDelete(videoId);
     await User.findByIdAndUpdate(user._id, { $pull: { videos: videoId } });
 
     // Clean up queue jobs
     await queueService.removeVideoJob(videoId);
 
+    // Cascade series cleanup if this video was part of a series
+    let affectedSiblingIds = [];
+    if (seriesId) {
+      affectedSiblingIds = await cascadeSeriesCleanup([seriesId]);
+    }
+
     if (redisService.getConnectionStatus()) {
-      await invalidateCache([
+      const cacheKeys = [
         'videos:feed:*', 
-        `videos:user:${googleId}`, 
+        `videos:user:${googleId}*`, 
         `user:feed:${googleId}:*`,
         VideoCacheKeys.all(), 
-        VideoCacheKeys.single(videoId)
-      ]);
+        VideoCacheKeys.single(videoId),
+        `video:data:${videoId}`
+      ];
+      affectedSiblingIds.forEach(id => {
+        cacheKeys.push(VideoCacheKeys.single(id));
+        cacheKeys.push(`video:data:${id}`);
+      });
+      await invalidateCache(cacheKeys);
     }
 
     res.json({ success: true, message: 'Video deleted successfully' });
@@ -266,6 +337,13 @@ export const bulkDeleteVideos = async (req, res) => {
 
     const objectIds = videoIds.map(id => new mongoose.Types.ObjectId(id));
 
+    // Capture seriesIds before deletion
+    const videosToDelete = await Video.find({
+      _id: { $in: objectIds },
+      uploader: user._id
+    }).select('seriesId');
+    const seriesIdsToClean = [...new Set(videosToDelete.map(v => v.seriesId).filter(Boolean))];
+
     const result = await Video.deleteMany({ 
       _id: { $in: objectIds }, 
       uploader: user._id 
@@ -282,15 +360,25 @@ export const bulkDeleteVideos = async (req, res) => {
       console.error('❌ Failed to clean up bulk queue jobs:', err);
     }
 
+    // Cascade series cleanup
+    const affectedSiblingIds = await cascadeSeriesCleanup(seriesIdsToClean);
+
     if (redisService.getConnectionStatus()) {
       const patterns = [
         'videos:feed:*',
-        `videos:user:${googleId}`,
+        `videos:user:${googleId}*`,
         `user:feed:${googleId}:*`,
         VideoCacheKeys.all()
       ];
       
-      for (const id of videoIds) patterns.push(VideoCacheKeys.single(id));
+      for (const id of videoIds) {
+        patterns.push(VideoCacheKeys.single(id));
+        patterns.push(`video:data:${id}`);
+      }
+      for (const id of affectedSiblingIds) {
+        patterns.push(VideoCacheKeys.single(id));
+        patterns.push(`video:data:${id}`);
+      }
 
       await invalidateCache(patterns);
     }

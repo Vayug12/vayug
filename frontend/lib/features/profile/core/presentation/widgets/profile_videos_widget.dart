@@ -83,6 +83,7 @@ class ProfileVideosWidget extends StatelessWidget {
       for (final video in videos.take(5)) {
         if (video.thumbnailUrl.isNotEmpty) {
           try {
+            if (!context.mounted) return;
             await precacheImage(NetworkImage(video.thumbnailUrl), context);
           } catch (e) {
             AppLogger.log(
@@ -317,11 +318,11 @@ class ProfileVideosWidget extends StatelessWidget {
         if (useListLayout && isVayu) {
           if (isSliver) {
             return SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    if (index.isOdd) return const SizedBox(height: 12);
+                    if (index.isOdd) return const SizedBox(height: 16);
 
                     final videoIndex = index ~/ 2;
                     return _buildVideoItem(
@@ -343,9 +344,9 @@ class ProfileVideosWidget extends StatelessWidget {
             child: ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               itemCount: displayVideos.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (context, index) => _buildVideoItem(
                 context,
                 manager,
@@ -413,7 +414,7 @@ class ProfileVideosWidget extends StatelessWidget {
   Widget _buildVideoItem(BuildContext context, ProfileStateManager manager,
       List<VideoModel> displayVideos, VideoModel video, int index) {
     final isSelected = manager.selectedVideoIds.contains(video.id);
-    final bool isSeries = video.seriesId != null;
+    final bool isSeries = video.isMultiEpisodeSeries;
     final bool isProcessing = _isVideoProcessing(video);
     final canSelectVideo =
         manager.isSelecting && manager.isOwner && manager.userData != null;
@@ -444,7 +445,7 @@ class ProfileVideosWidget extends StatelessWidget {
               return;
             }
 
-            if (isSeries && video.episodes != null && video.episodes!.isNotEmpty && !manager.isSelecting) {
+            if (isSeries && (video.episodes != null && video.episodes!.length > 1) && !manager.isSelecting) {
               AppLogger.log('🎬 ProfileVideosWidget: Series detected: ${video.id}. Opening episode list.');
               _showEpisodeList(context, video);
               return;
@@ -553,20 +554,14 @@ class ProfileVideosWidget extends StatelessWidget {
         child: InkWell(
           onTap: () => _handleVideoTap(context, manager, displayVideos, video, isProcessing, isSeries, canSelectVideo),
           onLongPress: () => _handleVideoLongPress(manager, video),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           child: Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
               color: isSelected
                   ? AppColors.primary.withValues(alpha: 0.12)
-                  : AppColors.backgroundSecondary.withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected
-                    ? AppColors.primary.withValues(alpha: 0.65)
-                    : AppColors.borderPrimary.withValues(alpha: 0.45),
-                width: isSelected ? 1.4 : 1,
-              ),
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,11 +569,11 @@ class ProfileVideosWidget extends StatelessWidget {
                 Stack(
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       child: Container(
-                        width: 138,
-                        height: 78,
-                        color: AppColors.backgroundPrimary,
+                        width: 140,
+                        height: 79,
+                        color: AppColors.backgroundSecondary,
                         child: video.thumbnailUrl.isNotEmpty
                             ? Image.network(
                                 video.thumbnailUrl,
@@ -601,17 +596,17 @@ class ProfileVideosWidget extends StatelessWidget {
                         right: 6,
                         bottom: 6,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.78),
-                            borderRadius: BorderRadius.circular(6),
+                            color: Colors.black.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             FormatUtils.formatDuration(video.duration),
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -621,7 +616,7 @@ class ProfileVideosWidget extends StatelessWidget {
                         child: Container(
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Center(
                             child: SizedBox(
@@ -634,7 +629,7 @@ class ProfileVideosWidget extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -647,9 +642,9 @@ class ProfileVideosWidget extends StatelessWidget {
                               title,
                               style: const TextStyle(
                                 color: AppColors.textPrimary,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                                height: 1.22,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                height: 1.3,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -666,19 +661,19 @@ class ProfileVideosWidget extends StatelessWidget {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         metaText,
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
-                          height: 1.25,
+                          height: 1.3,
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (hasDescription) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
                           video.description!.trim(),
                           style: const TextStyle(
@@ -748,10 +743,7 @@ class ProfileVideosWidget extends StatelessWidget {
       return;
     }
 
-    if (isSeries &&
-        video.episodes != null &&
-        video.episodes!.isNotEmpty &&
-        !manager.isSelecting) {
+    if (isSeries && (video.episodes != null && video.episodes!.length > 1) && !manager.isSelecting) {
       AppLogger.log('🎬 ProfileVideosWidget: Series detected: ${video.id}. Opening episode list.');
       _showEpisodeList(context, video);
       return;
@@ -795,7 +787,7 @@ class ProfileVideosWidget extends StatelessWidget {
   }
 
   void _showEpisodeList(BuildContext context, VideoModel video) {
-    if (video.episodes == null || video.episodes!.isEmpty) return;
+    if (video.episodes == null || video.episodes!.length <= 1) return;
     final BuildContext parentContext = context;
 
     AppLogger.log('🎬 ProfileVideosWidget: Showing episode list for series: ${video.seriesId}');

@@ -1174,24 +1174,15 @@ router.delete('/videos/:videoId', requireAdminDashboardKey, async (req, res) => 
       return res.status(404).json({ success: false, error: 'Video not found' });
     }
 
-    // Remove video from user's videos array
-    if (video.uploader) {
-      await User.findByIdAndUpdate(video.uploader, {
-        $pull: { videos: videoId }
-      });
-    }
+    // Permanently delete video, heavy attachments (APKs, PDFs), renditions, thumbnails, HLS, and all DB metadata
+    const { default: videoCleanupService } = await import('../services/uploadServices/videoCleanupService.js');
+    await videoCleanupService.deleteVideoCompletely(video);
 
-    // Delete the video
-    await Video.findByIdAndDelete(videoId);
-
-    // Clean up queue jobs
-    await queueService.removeVideoJob(videoId);
-
-    console.log(`✅ Admin deleted video: ${videoId} - ${video.videoName}`);
+    console.log(`✅ Admin deleted video and all assets: ${videoId} - ${video.videoName}`);
 
     res.json({
       success: true,
-      message: 'Video deleted successfully',
+      message: 'Video and all associated files deleted successfully',
       deletedVideo: {
         id: videoId,
         name: video.videoName
@@ -1245,17 +1236,9 @@ router.post('/videos/:videoId/remove', requireAdminDashboardKey, async (req, res
       console.warn('⚠️ Admin Moderation: Failed to create notice', noticeError);
     }
 
-    // 3. Remove the video ID from the user's videos array
-    await User.findOneAndUpdate(
-      { googleId: uploaderId },
-      { $pull: { videos: video._id } }
-    );
-
-    // 4. PERMANENTLY DELETE the video from the database
-    await Video.findByIdAndDelete(videoId);
-
-    // Clean up queue jobs
-    await queueService.removeVideoJob(videoId);
+    // 3. PERMANENTLY DELETE the video, heavy attachments (APKs, PDFs), and all assets from cloud & database
+    const { default: videoCleanupService } = await import('../services/uploadServices/videoCleanupService.js');
+    await videoCleanupService.deleteVideoCompletely(video, { googleId: uploaderId });
 
     res.json({
       success: true,

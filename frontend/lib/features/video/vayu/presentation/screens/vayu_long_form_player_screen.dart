@@ -1669,23 +1669,44 @@ class _VayuLongFormPlayerScreenState
   }
 
   Future<void> _openInExternalPlayer(VideoModel video) async {
-    if (Theme.of(context).platform == TargetPlatform.android) {
-      final intent = AndroidIntent(
+    // 1. Pause current video so audio doesn't keep playing in background
+    final controller = currentVideoController;
+    if (controller != null && controller.value.isPlaying) {
+      onUserPlaybackChanged(false);
+      await controller.pause();
+    }
+
+    // 2. Explicitly sync PiP state with force:true so native is notified that
+    // video is paused and autoEnterEnabled is false BEFORE launching external intent
+    await _syncPictureInPictureState(force: true);
+
+    // 3. Suppress PiP auto-enter so Android does not treat opening the external
+    // player chooser as leaving to home screen (which triggers PiP/minimizing)
+    await _pictureInPictureService.withAutoEnterSuppressed(() async {
+      if (Theme.of(context).platform == TargetPlatform.android) {
+        final intent = AndroidIntent(
           action: 'action_view',
           data: video.videoUrl,
           type: 'video/*',
-          flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK]);
-      try {
-        await intent.launch();
-      } catch (e) {
-        _showSnackBar('No external player found', type: VayuSnackBarType.error);
+          flags: <int>[
+            Flag.FLAG_ACTIVITY_NEW_TASK,
+            // FLAG_ACTIVITY_NO_USER_ACTION = 0x00040000 (262144)
+            // Explicitly tells Android NOT to invoke Activity.onUserLeaveHint()
+            0x00040000,
+          ],
+        );
+        try {
+          await intent.launch();
+        } catch (e) {
+          _showSnackBar('No external player found', type: VayuSnackBarType.error);
+        }
+      } else {
+        final url = Uri.parse(video.videoUrl);
+        if (await canLaunchUrl(url)) {
+          await launchUrl(url, mode: LaunchMode.externalApplication);
+        }
       }
-    } else {
-      final url = Uri.parse(video.videoUrl);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
-    }
+    });
   }
 
   Future<void> _handleToggleSave([int? requestedIndex]) async {

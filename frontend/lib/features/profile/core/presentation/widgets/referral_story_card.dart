@@ -95,7 +95,7 @@ class ReferralStoryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Creator on Vayu',
+                      'Creator on Vayug',
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                         fontSize: 13,

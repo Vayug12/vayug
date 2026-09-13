@@ -518,6 +518,91 @@ A description is not a step in this layout. Add one only when the title cannot c
 ✗ Marketing copy inside the product
 
 ---
+# Responsiveness & Scroll Safety
+
+Every screen, modal dialog, and bottom sheet must be 100% responsive and scroll-safe across all screen dimensions, landscape orientations, and system display zoom / font size settings.
+
+## Rules:
+
+1. **Never use naked Columns with fixed height or Spacer() without scroll protection:**
+   - Always wrap screen bodies with `LayoutBuilder` + `SingleChildScrollView` + `ConstrainedBox(minHeight: constraints.maxHeight)` + `IntrinsicHeight` when elements need to stretch or pin actions to the bottom.
+   - This ensures content expands naturally on large screens while smoothly scrolling on smaller phones (5–5.5 inches), split-screen, or landscape mode without `RenderFlex overflowed` errors.
+
+2. **Modal Bottom Sheets must be Constrained & Scrollable:**
+   - Always pass `isScrollControlled: true` to `showModalBottomSheet`.
+   - Constrain maximum height via `ConstrainedBox(constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88))`.
+   - Wrap dynamic/scrollable items in `Flexible(child: SingleChildScrollView(physics: const BouncingScrollPhysics(), ...))`.
+   - Keep primary action buttons pinned at the bottom with a subtle divider so they remain immediately accessible.
+
+3. **Dialogs & Confirmation Prompts:**
+   - Dynamic or variable text in dialogs must be scroll-safe.
+   - Maintain `insetPadding` (e.g. horizontal 24px) so dialogs never clip against viewport edges.
+
+4. **Accessibility Font Scaling:**
+   - Support system font scaling (>1.2x). Buttons, badges, and titles should use appropriate line wrapping or `TextOverflow.ellipsis` where single-line constraint is essential.
+   - Never hardcode fixed viewport assumptions (e.g., assuming height is always >= 800px).
+
+---
+
+# DO
+
+✓ Minimal
+
+✓ Premium
+
+✓ Calm
+
+✓ Spacious
+
+✓ Consistent
+
+✓ Apple quality
+
+✓ ChatGPT style
+
+✓ Linear style
+
+✓ Professional
+
+✓ 100% Scroll-safe & responsive on all screen sizes
+
+---
+
+# DON'T
+
+✗ Glassmorphism
+
+✗ Neon colors
+
+✗ Heavy gradients
+
+✗ Large drop shadows
+
+✗ Rounded blobs everywhere
+
+✗ Material 3 colorful defaults
+
+✗ Inconsistent spacing
+
+✗ Different button styles
+
+✗ Random font sizes
+
+✗ Crowded layouts
+
+✗ Naked Columns with Spacer() without scroll protection
+
+✗ Fixed height assumptions causing RenderFlex overflows
+
+✗ Helper text under inputs
+
+✗ Multiple icons saying same thing
+
+✗ Redundant text descriptions
+
+✗ More than 2-3 lines of text per screen
+
+---
 
 # AI Instructions
 
@@ -528,9 +613,12 @@ Whenever creating a new screen:
 - Do not invent new colors.
 - Follow the typography scale.
 - Keep interfaces minimal.
-- Write the least text that still works: no subtitle where a title is enough, no title where the button is enough.
-- Before shipping a screen, delete every line the UI already communicates.
 - Optimize for readability first.
 - Every screen should look like it belongs in the same product.
+- Always make screens and bottom sheets 100% responsive and scroll-safe (using LayoutBuilder + SingleChildScrollView + ConstrainedBox / Flexible) to guarantee zero RenderFlex overflow bugs on small devices, landscape, or high font-scaling modes.
 - If unsure, choose the simpler option.
-- The result should resemble a premium Apple-quality productivity app with the calm visual language of ChatGPT.
+- No helper text under any input or label.
+- Use minimum text. Say more with less.
+- One icon per element. No fancy multiple icons.
+- Primary CTA is always pure black (#000000) with white text. Secondary CTAs and accents use OpenAI green (#10A37F) and blue (#0066FF).
+- The result should resemble a premium Apple-quality productivity app with the calm, high-contrast visual language of ChatGPT.

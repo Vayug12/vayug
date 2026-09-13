@@ -36,6 +36,9 @@ class AppColors {
   static const Color borderPrimary = Color(0xFF334155);
   static const Color borderSecondary = Color(0xFF1E293B);
   static const Color divider = Color(0xFF334155);
+  static const Color borderSubtle = Color(0x14FFFFFF); // 8% white hairline border for Apple-style cards
+  static const Color borderHairline = Color(0x0DFFFFFF); // 5% white subtle border
+  static const Color separator = Color(0x0FFFFFFF); // 6% white hairline separator
 
   // Shadow Colors
   static const Color shadowPrimary = Color(0x0A000000);

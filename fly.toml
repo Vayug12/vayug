@@ -1,5 +1,5 @@
 app = "vayug"
-primary_region = "sin"
+primary_region = "bom"
 
 # Do process groups jaan-boojh kar:
 #   app    → Fly Proxy manage karta hai (HTTP pe auto-start, idle pe auto-stop)

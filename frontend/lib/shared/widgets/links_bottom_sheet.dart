@@ -72,6 +72,7 @@ class LinksBottomSheet extends StatelessWidget {
     if (links.isEmpty) return Future.value();
     return showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: AppColors.backgroundSecondary,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -124,10 +125,10 @@ class LinksBottomSheet extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
-          left: AppSpacing.spacing24,
-          right: AppSpacing.spacing24,
-          top: AppSpacing.spacing12,
-          bottom: AppSpacing.spacing24,
+          left: AppSpacing.space24,
+          right: AppSpacing.space24,
+          top: AppSpacing.space12,
+          bottom: AppSpacing.space24,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

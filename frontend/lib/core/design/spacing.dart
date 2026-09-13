@@ -56,6 +56,12 @@ class AppSpacing {
   static SizedBox get hSpace24 => SizedBox(width: space24);
   static SizedBox get hSpace32 => SizedBox(width: space32);
 
-  // Target Touch Areas
+  // Target Touch Areas (Apple HIG standard is 44pt)
   static const double minTouchTarget = 48.0;
+  static const double minTouchTargetApple = 44.0;
+
+  // Standard Apple Layout Insets
+  static EdgeInsets get sheetPadding => EdgeInsets.fromLTRB(spacing4, 0, spacing4, spacing6);
+  static EdgeInsets get cardPadding => EdgeInsets.symmetric(horizontal: spacing5, vertical: spacing6);
+  static EdgeInsets get buttonPadding => EdgeInsets.symmetric(horizontal: 14.0.r, vertical: spacing3);
 }

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import axios from 'axios';
 import fs from 'fs';
@@ -84,6 +84,63 @@ class CloudflareR2Service {
     }
   }
 
+  /**
+   * Delete multiple files from R2 in batches of up to 1000
+   * @param {string[]} keys - Array of R2 file keys
+   */
+  async deleteObjects(keys) {
+    if (!Array.isArray(keys) || keys.length === 0) return true;
+    try {
+      const validKeys = keys.filter(k => typeof k === 'string' && k.trim());
+      const BATCH_SIZE = 1000;
+      for (let i = 0; i < validKeys.length; i += BATCH_SIZE) {
+        const chunk = validKeys.slice(i, i + BATCH_SIZE);
+        const command = new DeleteObjectsCommand({
+          Bucket: this.bucketName,
+          Delete: {
+            Objects: chunk.map(key => ({ Key: key })),
+            Quiet: true,
+          },
+        });
+        await this.s3Client.send(command);
+      }
+      return true;
+    } catch (error) {
+      console.error('❌ Error batch deleting from R2:', error);
+      // Fallback to one-by-one delete
+      for (const k of keys) {
+        await this.deleteFile(k).catch(() => {});
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Delete an entire folder/prefix in R2 (e.g. HLS segments)
+   * @param {string} prefix - The directory prefix (e.g., 'hls/userId/videoName/')
+   */
+  async deletePrefix(prefix) {
+    if (!prefix || typeof prefix !== 'string') return;
+    try {
+      let continuationToken = null;
+      do {
+        const listParams = {
+          Bucket: this.bucketName,
+          Prefix: prefix,
+        };
+        if (continuationToken) listParams.ContinuationToken = continuationToken;
+        const listResponse = await this.s3Client.send(new ListObjectsV2Command(listParams));
+        if (listResponse.Contents && listResponse.Contents.length > 0) {
+          const keys = listResponse.Contents.map(obj => obj.Key);
+          await this.deleteObjects(keys);
+        }
+        continuationToken = listResponse.IsTruncated ? listResponse.NextContinuationToken : null;
+      } while (continuationToken);
+      console.log(`🧹 Deleted R2 prefix: ${prefix}`);
+    } catch (error) {
+      console.error(`❌ Error deleting R2 prefix ${prefix}:`, error);
+    }
+  }
 
   /**
    * Get public URL for an R2 object key

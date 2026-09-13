@@ -65,6 +65,10 @@ class AdService {
       adType: adCreative.adType,
       imageUrl: imageUrl,
       link: link,
+      links: Array.isArray(adCreative.links) && adCreative.links.length > 0
+        ? adCreative.links.map(l => ({ title: (l.title || '').trim(), url: (l.url || '').trim() })).filter(l => l.url.length > 0)
+        : (link ? [{ title: adCreative.callToAction?.label || '', url: link }] : []),
+      callToAction: adCreative.callToAction,
       cloudinaryUrl: adCreative.cloudinaryUrl,
       thumbnail: adCreative.thumbnail,
       impressions: adCreative.impressions || 0,

@@ -39,6 +39,12 @@ export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceI
     videoType: videoObj.videoType || 'yog',
     mediaType: videoObj.mediaType || 'video',
     link: videoObj.link || null,
+    links: Array.isArray(videoObj.links) && videoObj.links.length > 0
+      ? videoObj.links.map(l => ({
+          title: (l.title || '').trim(),
+          url: (l.url || '').trim()
+        })).filter(l => l.url.length > 0)
+      : (videoObj.link && String(videoObj.link).trim() ? [{ title: '', url: String(videoObj.link).trim() }] : []),
     uploadedAt: (videoObj.uploadedAt || videoObj.createdAt)?.toISOString ? (videoObj.uploadedAt || videoObj.createdAt).toISOString() : (videoObj.uploadedAt || videoObj.createdAt),
     isLiked: isLiked,
     earnings: parseFloat(videoObj.earnings) || 0.0,

@@ -332,6 +332,7 @@ class ProfileVideoManager extends ChangeNotifier {
       episodes: shouldClearEpisodes ? null : parsedEpisodes,
       clearEpisodes: shouldClearEpisodes,
     );
+    _smartCacheManager.invalidateVideoCache();
     notifyListenersSafe();
   }
 

@@ -506,6 +506,7 @@ class ProfileVideosWidget extends StatelessWidget {
                     ),
                   );
                   if (result != null) {
+                    manager.updateVideoInList(video.id, result);
                     manager.refreshData();
                   }
                 },
@@ -710,6 +711,7 @@ class ProfileVideosWidget extends StatelessWidget {
           ),
         );
         if (result != null) {
+          manager.updateVideoInList(video.id, result);
           manager.refreshData();
         }
       },

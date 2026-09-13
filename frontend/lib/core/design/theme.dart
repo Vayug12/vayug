@@ -58,7 +58,7 @@ class AppTheme {
   }) {
     return BoxDecoration(
       color: backgroundColor ?? AppColors.surfacePrimary,
-      borderRadius: BorderRadius.circular(borderRadius ?? AppRadius.md),
+      borderRadius: BorderRadius.circular(borderRadius ?? AppRadius.card),
       boxShadow: shadows ?? AppElevation.shadowSm,
       border: border != null
           ? Border.all(color: border.color, width: border.width)
@@ -116,7 +116,7 @@ class AppTheme {
         color: AppColors.surfacePrimary,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius: BorderRadius.circular(AppRadius.card),
         ),
         margin: EdgeInsets.all(AppSpacing.spacing2),
       ),
@@ -268,7 +268,7 @@ class AppTheme {
         backgroundColor: AppColors.surfacePrimary,
         elevation: 8,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(AppRadius.dialog),
         ),
         titleTextStyle: AppTypography.headlineMedium,
         contentTextStyle: AppTypography.bodyMedium,
@@ -279,7 +279,7 @@ class AppTheme {
         backgroundColor: AppColors.backgroundSecondary,
         elevation: 8,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
         ),
       ),
 

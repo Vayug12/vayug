@@ -24,7 +24,7 @@ class AdMultiLinkField extends StatelessWidget {
     final count = links.length;
 
     return Container(
-      padding: EdgeInsets.all(AppSpacing.spacing12),
+      padding: EdgeInsets.all(AppSpacing.space12),
       decoration: BoxDecoration(
         color: AppColors.backgroundSecondary,
         borderRadius: BorderRadius.circular(12),

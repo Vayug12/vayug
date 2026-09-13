@@ -5,4 +5,5 @@
          Flutter has not painted yet - including behind the system navigation
          bar - so any mismatch reads as an off-theme strip on screen. -->
     <color name="app_background">#0F172A</color>
+    <color name="ic_launcher_background">#0F172A</color>
 </resources>

@@ -559,16 +559,16 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
                     },
                   );
                 },
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.spacing16,
-                    vertical: AppSpacing.spacing12,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.backgroundSecondary,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.borderSecondary),
+                    color: AppColors.backgroundSecondary.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderSecondary.withValues(alpha: 0.5)),
                   ),
                   child: Row(
                     children: [

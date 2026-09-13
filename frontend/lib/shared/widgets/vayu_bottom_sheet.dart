@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:vayug/core/design/colors.dart';
+import 'package:vayug/core/design/elevation.dart';
 import 'package:vayug/core/design/radius.dart';
 import 'package:vayug/core/design/typography.dart';
 
@@ -109,28 +111,22 @@ class VayuBottomSheet extends StatelessWidget {
 
     Widget content = ClipRRect(
       borderRadius: isFloating 
-        ? BorderRadius.circular(28) 
-        : BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+        ? AppRadius.borderRadiusSheetFloating 
+        : AppRadius.borderRadiusSheet,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
           constraints: effectiveMaxWidth != null ? BoxConstraints(maxWidth: effectiveMaxWidth) : null,
           decoration: BoxDecoration(
-            color: AppColors.backgroundPrimary.withValues(alpha: 0.75),
+            color: AppColors.backgroundPrimary.withValues(alpha: 0.82),
             borderRadius: isFloating 
-              ? BorderRadius.circular(28)
-              : BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+              ? AppRadius.borderRadiusSheetFloating 
+              : AppRadius.borderRadiusSheet,
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.1),
+              color: AppColors.borderSubtle,
               width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 24,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            boxShadow: AppElevation.sheetShadow,
           ),
           child: SafeArea(
             top: false,
@@ -141,11 +137,11 @@ class VayuBottomSheet extends StatelessWidget {
                 if (showHandle)
                   Center(
                     child: Container(
-                      width: 32,
-                      height: 4,
+                      width: 36,
+                      height: 5,
                       margin: EdgeInsets.symmetric(vertical: isLandscape ? 6 : 10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: Colors.white.withValues(alpha: 0.28),
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
@@ -158,7 +154,7 @@ class VayuBottomSheet extends StatelessWidget {
                     padding: EdgeInsets.fromLTRB(
                         isLandscape ? 16 : 20,
                         showHandle ? 0 : (isLandscape ? 6 : 20),
-                        8,
+                        isLandscape ? 12 : 16,
                         isLandscape ? 4 : 12),
                     child: Row(
                       children: [
@@ -182,10 +178,20 @@ class VayuBottomSheet extends StatelessWidget {
                           const Spacer(),
                         if (actions != null) ...actions!,
                         if (showCloseButton)
-                          IconButton(
-                            icon: const Icon(Icons.close, color: AppColors.textTertiary, size: 18),
-                            onPressed: () => Navigator.pop(context),
-                            visualDensity: VisualDensity.compact,
+                          Material(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pop(context);
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.all(6),
+                                child: Icon(Icons.close, color: AppColors.textSecondary, size: 16),
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -198,7 +204,7 @@ class VayuBottomSheet extends StatelessWidget {
                     : SingleChildScrollView(
                       controller: scrollController,
                       physics: const BouncingScrollPhysics(),
-                      padding: padding ?? (isLandscape ? const EdgeInsets.fromLTRB(16, 0, 16, 10) : const EdgeInsets.fromLTRB(20, 0, 20, 20)),
+                      padding: padding ?? (isLandscape ? const EdgeInsets.fromLTRB(16, 0, 16, 10) : const EdgeInsets.fromLTRB(16, 0, 16, 20)),
                       child: child,
                     ),
                 ),

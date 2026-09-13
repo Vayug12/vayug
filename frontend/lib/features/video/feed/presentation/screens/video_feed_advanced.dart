@@ -1599,19 +1599,19 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
       _forceShowOverlayVN[video.id]?.value = false;
     });
 
-    // If the video is already liked by the current user, only show animation
+    // If the video is already liked by the current user, only show animation (do not increment count or unlike)
     // Check our specific notifier first for most up-to-date state
     final isLikedNotifier = _isLikedVN.putIfAbsent(
         video.id, () => ValueNotifier<bool>(video.isLiked));
 
     if (isLikedNotifier.value) {
       AppLogger.log(
-        '🔴 DoubleTap Like: Video already liked by current user – showing animation only',
+        '🔴 DoubleTap Like: Video already liked by current user – showing animation only (count unchanged)',
       );
       return;
     }
 
-    // Handle the like
+    // Handle the like (increments count by 1)
     await _handleLike(video);
   }
 

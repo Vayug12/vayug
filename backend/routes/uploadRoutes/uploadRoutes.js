@@ -187,6 +187,119 @@ router.post('/video/presigned', verifyToken, enforceDailyUploadAvailability, upl
 });
 
 /**
+ * @route POST /api/upload/resource/presigned
+ * @desc Generate presigned URL for direct R2 upload of resources (APK, PDF, Notes, Docs)
+ * @access Private
+ */
+router.post('/resource/presigned', verifyToken, uploadLimiter, async (req, res) => {
+  try {
+    const { fileName, fileType, fileSize } = req.body;
+    const userId = req.user.id || req.user._id || req.user.googleId;
+
+    if (!fileName) {
+      return res.status(400).json({ error: 'FileName is required' });
+    }
+
+    // Limit to 200MB for resources
+    if (fileSize && fileSize > 200 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File too large (Max 200MB)' });
+    }
+
+    const timestamp = Date.now();
+    const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `resources/${userId}/${timestamp}_${cleanFileName}`;
+    const contentType = fileType || 'application/octet-stream';
+
+    const uploadUrl = await cloudflareR2Service.getPresignedUploadUrl(key, contentType, 3600);
+    const publicUrl = cloudflareR2Service.getPublicUrl(key);
+
+    res.json({
+      success: true,
+      uploadUrl,
+      publicUrl,
+      key,
+      headers: {
+        'Content-Type': contentType,
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error generating resource presigned URL:', error);
+    res.status(500).json({ error: 'Failed to generate resource upload URL' });
+  }
+});
+
+// Configure multer for resource file uploads (APK, PDF, Notes, Docs, etc.)
+const resourceStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'resources');
+    try {
+      await fs.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, `resource-${uniqueSuffix}${ext}`);
+  }
+});
+
+const resourceUpload = multer({
+  storage: resourceStorage,
+  limits: {
+    fileSize: 200 * 1024 * 1024, // 200MB limit for resources
+    files: 1
+  }
+});
+
+/**
+ * @route POST /api/upload/resource
+ * @desc Direct multipart resource file upload (APK, PDF, Docs) fallback
+ * @access Private
+ */
+router.post('/resource', verifyToken, uploadLimiter, resourceUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const userId = req.user.id || req.user._id || req.user.googleId;
+    const cleanFileName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `resources/${userId}/${Date.now()}_${cleanFileName}`;
+
+    try {
+      const result = await cloudflareR2Service.uploadFileToR2(
+        req.file.path,
+        key,
+        req.file.mimetype || 'application/octet-stream'
+      );
+      // Clean up local temp file
+      await fs.unlink(req.file.path).catch(() => {});
+      return res.json({
+        success: true,
+        url: result.url,
+        key: result.key,
+        fileName: req.file.originalname,
+      });
+    } catch (r2Err) {
+      console.warn('⚠️ Cloudflare R2 resource upload fallback to local URL:', r2Err.message);
+      const baseUrl = process.env.SERVER_URL || `${req.protocol}://${req.get('host')}`;
+      const localUrl = `${baseUrl}/uploads/resources/${path.basename(req.file.path)}`;
+      return res.json({
+        success: true,
+        url: localUrl,
+        fileName: req.file.originalname,
+      });
+    }
+  } catch (err) {
+    console.error('❌ Error in resource upload route:', err);
+    res.status(500).json({ error: 'Resource upload failed', details: err.message });
+  }
+});
+
+/**
  * @route POST /api/upload/video/direct-complete
  * @desc Notify backend that direct upload is complete and trigger processing
  * @access Private
@@ -367,9 +480,34 @@ router.post('/video', verifyToken, enforceDailyUploadAvailability, uploadLimiter
       return res.status(400).json({ success: false, error: 'No video file uploaded' });
     }
 
-    const { videoName, description, link, crossPostPlatforms, category, tags, quizzes } = req.body;
+    const { videoName, description, link, links, crossPostPlatforms, category, tags, quizzes } = req.body;
     const userId = req.user.id;
     const videoPath = req.file.path;
+
+    // Parse links array if provided
+    let parsedLinks = [];
+    if (Array.isArray(links)) {
+      parsedLinks = links.map(l => {
+        if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
+        if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+        return null;
+      }).filter(Boolean);
+    } else if (typeof links === 'string') {
+      try {
+        const decoded = JSON.parse(links);
+        if (Array.isArray(decoded)) {
+          parsedLinks = decoded.map(l => {
+            if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
+            if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+            return null;
+          }).filter(Boolean);
+        }
+      } catch (_) {}
+    }
+    if (parsedLinks.length === 0 && link && String(link).trim()) {
+      parsedLinks = [{ title: '', url: String(link).trim() }];
+    }
+    const primaryLink = parsedLinks.length > 0 ? parsedLinks[0].url : (link ? String(link).trim() : '');
 
     // **NEW: Lazy load hybrid service to ensure env vars are loaded**
     if (!hybridVideoService) {
@@ -470,7 +608,8 @@ router.post('/video', verifyToken, enforceDailyUploadAvailability, uploadLimiter
       },
       processingStatus: 'pending',
       processingProgress: 0,
-      link: link || '', // **FIX: Include link field from request body**
+      link: primaryLink,
+      links: parsedLinks,
       videoHash: videoHash, // **NEW: Save hash for duplicate detection**
       episodeNumber: req.body.episodeNumber ? parseInt(req.body.episodeNumber) : 0, // **NEW: Save episode number**
       category: category || 'others',

@@ -43,4 +43,32 @@ class AppElevation {
       spreadRadius: 0,
     ),
   ];
+
+  // Apple HIG Soft Ambient & Layered Elevation Shadows
+  static const List<BoxShadow> cardShadow = [
+    BoxShadow(
+      color: Color(0x33000000),
+      blurRadius: 20,
+      offset: Offset(0, 4),
+      spreadRadius: 0,
+    ),
+  ];
+
+  static const List<BoxShadow> sheetShadow = [
+    BoxShadow(
+      color: Color(0x59000000),
+      blurRadius: 28,
+      offset: Offset(0, -4),
+      spreadRadius: 0,
+    ),
+  ];
+
+  static const List<BoxShadow> dialogShadow = [
+    BoxShadow(
+      color: Color(0x73000000),
+      blurRadius: 40,
+      offset: Offset(0, 12),
+      spreadRadius: 0,
+    ),
+  ];
 }

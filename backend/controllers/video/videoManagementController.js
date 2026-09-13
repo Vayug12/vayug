@@ -8,6 +8,7 @@ import { invalidateCache, VideoCacheKeys } from '../../middleware/cacheMiddlewar
 import { logger } from '../../middleware/traceMiddleware.js';
 import { serializeVideo } from '../../utils/serializers/videoSerializer.js';
 import queueService from '../../services/yugFeedServices/queueService.js';
+import videoCleanupService from '../../services/uploadServices/videoCleanupService.js';
 
 /**
  * **Update Video Metadata**
@@ -45,11 +46,16 @@ export const updateVideo = async (req, res) => {
           return null;
         }).filter(Boolean);
       }
+      // Clean up any heavy attachment files that were removed from the video
+      await videoCleanupService.cleanupOrphanedAttachments(video.links, parsedLinks);
+
       video.links = parsedLinks;
       video.link = parsedLinks.length > 0 ? parsedLinks[0].url : '';
     } else if (link !== undefined) {
+      const newParsed = link.trim() ? [{ title: '', url: link.trim() }] : [];
+      await videoCleanupService.cleanupOrphanedAttachments(video.links, newParsed);
       video.link = link.trim();
-      video.links = link.trim() ? [{ title: '', url: link.trim() }] : [];
+      video.links = newParsed;
     }
     if (seriesId !== undefined) video.seriesId = seriesId;
     if (episodeNumber !== undefined) video.episodeNumber = parseInt(episodeNumber) || 0;
@@ -67,9 +73,14 @@ export const updateVideo = async (req, res) => {
     }
 
     if (thumbnailKey) {
-      // Lazy load cloudflareR2Service if needed or import it at top
-      // For consistency with direct-complete, we'll assume it's available or we use a helper
       const { default: cloudflareR2Service } = await import('../../services/uploadServices/cloudflareR2Service.js');
+      // If there was an old thumbnail in R2, clean it up to prevent orphaned files
+      if (video.thumbnailUrl) {
+        const oldKey = videoCleanupService.getR2KeyFromUrl(video.thumbnailUrl);
+        if (oldKey && oldKey !== thumbnailKey) {
+          cloudflareR2Service.deleteFile(oldKey).catch(() => {});
+        }
+      }
       video.thumbnailUrl = cloudflareR2Service.getPublicUrl(thumbnailKey);
       logger.info(req.traceId, 'Video thumbnail updated', { videoId, thumbnailKey });
     }
@@ -83,7 +94,9 @@ export const updateVideo = async (req, res) => {
         `videos:user:${googleId}`,
         VideoCacheKeys.all(),
         VideoCacheKeys.single(videoId),
-        `video:data:${videoId}`
+        `video:data:${videoId}`,
+        `video:data:v2:${videoId}`,
+        'user:feed:*'
       ];
 
       if (video.seriesId) {
@@ -92,6 +105,7 @@ export const updateVideo = async (req, res) => {
           siblings.forEach(s => {
             keysToInvalidate.push(VideoCacheKeys.single(s._id.toString()));
             keysToInvalidate.push(`video:data:${s._id.toString()}`);
+            keysToInvalidate.push(`video:data:v2:${s._id.toString()}`);
           });
         } catch (e) {}
       }
@@ -288,27 +302,17 @@ export const deleteVideo = async (req, res) => {
 
     const seriesId = video.seriesId;
 
-    await Video.findByIdAndDelete(videoId);
-    await User.findByIdAndUpdate(user._id, { $pull: { videos: videoId } });
+    // 1. Permanently delete all storage assets (heavy attachment files, APKs, PDFs, video qualities, HLS, thumbnails) and all DB metadata
+    await videoCleanupService.deleteVideoCompletely(video, { googleId });
 
-    // Clean up queue jobs
-    await queueService.removeVideoJob(videoId);
-
-    // Cascade series cleanup if this video was part of a series
+    // 2. Cascade series cleanup if this video was part of a series
     let affectedSiblingIds = [];
     if (seriesId) {
       affectedSiblingIds = await cascadeSeriesCleanup([seriesId]);
     }
 
-    if (redisService.getConnectionStatus()) {
-      const cacheKeys = [
-        'videos:feed:*', 
-        `videos:user:${googleId}*`, 
-        `user:feed:${googleId}:*`,
-        VideoCacheKeys.all(), 
-        VideoCacheKeys.single(videoId),
-        `video:data:${videoId}`
-      ];
+    if (redisService.getConnectionStatus() && affectedSiblingIds.length > 0) {
+      const cacheKeys = [];
       affectedSiblingIds.forEach(id => {
         cacheKeys.push(VideoCacheKeys.single(id));
         cacheKeys.push(`video:data:${id}`);
@@ -316,7 +320,7 @@ export const deleteVideo = async (req, res) => {
       await invalidateCache(cacheKeys);
     }
 
-    res.json({ success: true, message: 'Video deleted successfully' });
+    res.json({ success: true, message: 'Video and all associated files deleted successfully' });
   } catch (error) {
     console.error('❌ Error deleting video:', error);
     res.status(500).json({ error: 'Failed to delete video' });
@@ -337,56 +341,35 @@ export const bulkDeleteVideos = async (req, res) => {
 
     const objectIds = videoIds.map(id => new mongoose.Types.ObjectId(id));
 
-    // Capture seriesIds before deletion
+    // Capture all videos to delete with their file links and series info
     const videosToDelete = await Video.find({
       _id: { $in: objectIds },
       uploader: user._id
-    }).select('seriesId');
+    });
+
     const seriesIdsToClean = [...new Set(videosToDelete.map(v => v.seriesId).filter(Boolean))];
 
-    const result = await Video.deleteMany({ 
-      _id: { $in: objectIds }, 
-      uploader: user._id 
-    });
-
-    await User.findByIdAndUpdate(user._id, { 
-      $pull: { videos: { $in: objectIds } } 
-    });
-
-    // Clean up queue jobs for all deleted videos
-    try {
-      await Promise.all(videoIds.map(id => queueService.removeVideoJob(id)));
-    } catch (err) {
-      console.error('❌ Failed to clean up bulk queue jobs:', err);
+    // Permanently delete each video and all associated storage files (APKs, PDFs, video, thumbnail, HLS) & DB metadata
+    for (const v of videosToDelete) {
+      await videoCleanupService.deleteVideoCompletely(v, { googleId });
     }
 
     // Cascade series cleanup
     const affectedSiblingIds = await cascadeSeriesCleanup(seriesIdsToClean);
 
-    if (redisService.getConnectionStatus()) {
-      const patterns = [
-        'videos:feed:*',
-        `videos:user:${googleId}*`,
-        `user:feed:${googleId}:*`,
-        VideoCacheKeys.all()
-      ];
-      
-      for (const id of videoIds) {
-        patterns.push(VideoCacheKeys.single(id));
-        patterns.push(`video:data:${id}`);
-      }
+    if (redisService.getConnectionStatus() && affectedSiblingIds.length > 0) {
+      const patterns = [];
       for (const id of affectedSiblingIds) {
         patterns.push(VideoCacheKeys.single(id));
         patterns.push(`video:data:${id}`);
       }
-
       await invalidateCache(patterns);
     }
 
     res.json({ 
       success: true, 
-      message: `Successfully deleted ${result.deletedCount} videos`,
-      deletedCount: result.deletedCount
+      message: `Successfully deleted ${videosToDelete.length} videos and all associated files`,
+      deletedCount: videosToDelete.length
     });
   } catch (error) {
     console.error('❌ Bulk delete error:', error);

@@ -9,6 +9,7 @@ import { logger } from '../../middleware/traceMiddleware.js';
 import { serializeVideo } from '../../utils/serializers/videoSerializer.js';
 import queueService from '../../services/yugFeedServices/queueService.js';
 import videoCleanupService from '../../services/uploadServices/videoCleanupService.js';
+import { validateCreatorLink } from '../../utils/common.js';
 
 /**
  * **Update Video Metadata**
@@ -46,16 +47,35 @@ export const updateVideo = async (req, res) => {
           return null;
         }).filter(Boolean);
       }
-      // Clean up any heavy attachment files that were removed from the video
+
+      for (let i = 0; i < parsedLinks.length; i++) {
+        const linkValidation = validateCreatorLink(parsedLinks[i].url);
+        if (!linkValidation.valid) {
+          return res.status(400).json({ error: `Link ${i + 1}: ${linkValidation.error}` });
+        }
+        parsedLinks[i].url = linkValidation.normalizedUrl;
+      }
+
       await videoCleanupService.cleanupOrphanedAttachments(video.links, parsedLinks);
 
       video.links = parsedLinks;
       video.link = parsedLinks.length > 0 ? parsedLinks[0].url : '';
     } else if (link !== undefined) {
-      const newParsed = link.trim() ? [{ title: '', url: link.trim() }] : [];
-      await videoCleanupService.cleanupOrphanedAttachments(video.links, newParsed);
-      video.link = link.trim();
-      video.links = newParsed;
+      const trimmedLink = link.trim();
+      if (trimmedLink) {
+        const linkValidation = validateCreatorLink(trimmedLink);
+        if (!linkValidation.valid) {
+          return res.status(400).json({ error: `Link: ${linkValidation.error}` });
+        }
+        const newParsed = [{ title: '', url: linkValidation.normalizedUrl }];
+        await videoCleanupService.cleanupOrphanedAttachments(video.links, newParsed);
+        video.link = linkValidation.normalizedUrl;
+        video.links = newParsed;
+      } else {
+        await videoCleanupService.cleanupOrphanedAttachments(video.links, []);
+        video.link = '';
+        video.links = [];
+      }
     }
     if (seriesId !== undefined) video.seriesId = seriesId;
     if (episodeNumber !== undefined) video.episodeNumber = parseInt(episodeNumber) || 0;

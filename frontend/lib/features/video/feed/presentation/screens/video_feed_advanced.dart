@@ -56,6 +56,9 @@ import 'package:vayug/shared/utils/app_logger.dart';
 import 'package:vayug/shared/utils/feed_page_alignment.dart';
 import 'package:vayug/shared/utils/page_scroll_physics.dart';
 import 'package:vayug/shared/utils/url_utils.dart';
+import 'package:vayug/shared/widgets/feed_visit_now_button.dart';
+import 'package:vayug/features/video/paid/data/services/paid_video_service.dart';
+import 'package:vayug/features/video/paid/presentation/widgets/paid_video_player_guard.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vayug/features/onboarding/presentation/managers/app_initialization_manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -1180,8 +1183,12 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
     // Preloading a neighbour refreshes that neighbour's LRU timestamp, so
     // without this the video on screen can become the eviction candidate.
     if (index >= 0 && index < _videos.length) {
+      final currentVid = _videos[index];
       SharedVideoControllerPool()
-          .pinVideo(_videos[index].id, sessionId: _playbackSession.id);
+          .pinVideo(currentVid.id, sessionId: _playbackSession.id);
+      if (currentVid.isPaidVideo) {
+        PaidVideoService.instance.checkAccess(currentVid.id);
+      }
     }
 
     // 4. Handle preloading and resource protection (debounced)
@@ -1323,7 +1330,21 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final localPosition = renderBox.globalToLocal(details.globalPosition);
     final screenWidth = _screenWidth ?? MediaQuery.of(context).size.width;
-    final seekPosition = (localPosition.dx / screenWidth).clamp(0.0, 1.0);
+    double seekPosition = (localPosition.dx / screenWidth).clamp(0.0, 1.0);
+
+    // Guard against seeking past the preview limit on locked paid videos
+    final currentVid = _currentIndex < _videos.length ? _videos[_currentIndex] : null;
+    if (currentVid != null && currentVid.isPaidVideo) {
+      final bool isCreator = _currentUserId != null &&
+          (currentVid.uploader.id == _currentUserId ||
+              currentVid.uploader.googleId == _currentUserId);
+      if (!isCreator && !PaidVideoService.instance.isLocallyUnlocked(currentVid.id)) {
+        final maxPercent = (currentVid.paidAccess?.previewPercentage ?? 20.0) / 100.0;
+        if (seekPosition > maxPercent) {
+          seekPosition = maxPercent;
+        }
+      }
+    }
 
     final duration = controller.value.duration;
     final newPosition = duration * seekPosition;
@@ -1820,31 +1841,51 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
     final singleUrl = validLinks.isNotEmpty
         ? validLinks.first.url
         : (video.link?.trim() ?? '');
-    if (singleUrl.isEmpty) return;
+    if (singleUrl.isEmpty) {
+      _showSnackBar('No link available for this video', isError: true);
+      return;
+    }
     await _launchExternalUrl(singleUrl);
   }
 
   /// **LAUNCH EXTERNAL URL: Helper method for ads and video links**
   Future<void> _launchExternalUrl(String urlString) async {
     try {
-      // Enrich with UTM params so website owners can attribute traffic to vayug
       final enrichedUrl = UrlUtils.enrichUrl(
         urlString,
         medium: 'video_feed',
         campaign: 'creator_visit',
       );
+
       final Uri? uri = Uri.tryParse(enrichedUrl);
-      if (uri != null) {
-        // Use url_launcher to open the link
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (uri == null) {
+        _showSnackBar('This link format is invalid and cannot be opened.', isError: true);
+        return;
+      }
+
+      if (!await canLaunchUrl(uri)) {
+        final scheme = uri.scheme.toLowerCase();
+        if (scheme != 'http' && scheme != 'https') {
+          _showSnackBar('This link type is not supported.', isError: true);
         } else {
-          _showSnackBar('Could not open link', isError: true);
+          _showSnackBar(
+            'No browser found to open this link. Please check if a browser app is installed.',
+            isError: true,
+          );
         }
+        return;
+      }
+
+      final success = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!success) {
+        _showSnackBar(
+          'Could not open link. The website may be down or temporarily unavailable.',
+          isError: true,
+        );
       }
     } catch (e) {
       AppLogger.log('❌ Error opening link: $e');
-      _showSnackBar('Failed to open link', isError: true);
+      _showSnackBar('An unexpected error occurred while opening the link.', isError: true);
     }
   }
 
@@ -1978,6 +2019,9 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             _scheduleAutoplayAfterLogin();
+            _loadActiveAds().catchError((e) {
+              AppLogger.log('⚠️ Error reloading ads after login: $e');
+            });
           }
         });
       } else {

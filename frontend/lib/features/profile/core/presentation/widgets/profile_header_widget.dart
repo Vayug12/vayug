@@ -13,6 +13,7 @@ import 'package:vayug/shared/utils/app_text.dart';
 import 'package:vayug/shared/utils/url_utils.dart';
 import 'package:vayug/shared/services/app_remote_config_service.dart';
 import 'package:vayug/shared/widgets/follow_button_widget.dart';
+import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 
 class ProfileHeaderWidget extends ConsumerWidget {
   final bool isViewingOwnProfile;
@@ -121,16 +122,49 @@ class ProfileHeaderWidget extends ConsumerWidget {
                         onTap: () async {
                           final urlStr =
                               stateManager.userData!['websiteUrl'].toString();
+                          if (urlStr.isEmpty) return;
+
                           final enrichedUrl = UrlUtils.enrichUrl(
                             urlStr,
                             source: 'vayug',
                             medium: 'profile',
                             campaign: 'creator_visit',
                           );
-                          final uri = Uri.tryParse(enrichedUrl);
-                          if (uri != null && await canLaunchUrl(uri)) {
-                            await launchUrl(uri,
+
+                          try {
+                            final uri = Uri.tryParse(enrichedUrl);
+                            if (uri == null) {
+                              if (context.mounted) {
+                                VayuSnackBar.showError(context, 'This link format is invalid.');
+                              }
+                              return;
+                            }
+
+                            if (!await canLaunchUrl(uri)) {
+                              if (context.mounted) {
+                                VayuSnackBar.showError(
+                                  context,
+                                  'No browser found to open this link.',
+                                );
+                              }
+                              return;
+                            }
+
+                            final success = await launchUrl(uri,
                                 mode: LaunchMode.externalApplication);
+                            if (!success && context.mounted) {
+                              VayuSnackBar.showError(
+                                context,
+                                'Could not open link. The website may be down.',
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              VayuSnackBar.showError(
+                                context,
+                                'An error occurred while opening the link.',
+                              );
+                            }
                           }
                         },
                         child: Container(
@@ -422,6 +456,16 @@ class ProfileHeaderWidget extends ConsumerWidget {
             increment: isFollowing,
           );
         },
+        isFullWidth: true,
+        height: 48,
+        // Profile-specific styling: white primary CTA when not subscribed
+        activeBackgroundColor: AppColors.white,
+        activeTextColor: AppColors.textInverse,
+        activeBorderColor: AppColors.white,
+        // Secondary style when subscribed
+        inactiveBackgroundColor: AppColors.surfacePrimary,
+        inactiveTextColor: AppColors.textSecondary,
+        inactiveBorderColor: AppColors.borderPrimary,
       );
     }
 

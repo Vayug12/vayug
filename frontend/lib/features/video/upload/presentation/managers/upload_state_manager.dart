@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:vayug/core/interfaces/i_video_upload_service.dart';
 import 'package:vayug/core/interfaces/i_video_service.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
+import 'package:vayug/features/video/paid/domain/models/paid_video_config.dart';
 import 'package:vayug/features/video/upload/domain/models/episode_draft.dart';
 import 'package:vayug/shared/services/notification_service.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
@@ -27,6 +28,8 @@ class _UploadRequest {
   final List<String>? allowedSubscribers;
   final List<String> targetProfessionIds;
   final List<QuizModel>? quizzes;
+  final Map<String, dynamic>? paidAccess;
+  final String? videoType;
 
   const _UploadRequest({
     required this.title,
@@ -39,6 +42,8 @@ class _UploadRequest {
     this.allowedSubscribers,
     this.targetProfessionIds = const [],
     this.quizzes,
+    this.paidAccess,
+    this.videoType,
   });
 }
 
@@ -145,6 +150,16 @@ class UploadStateManager extends ChangeNotifier {
 
   Map<String, String> _crossPostStatus = {};
   Map<String, String> get crossPostStatus => _crossPostStatus;
+
+  // --- Paid Video State ---
+  PaidVideoConfig? _paidConfig;
+  PaidVideoConfig? get paidConfig => _paidConfig;
+  bool get isPaidVideo => _paidConfig != null && _paidConfig!.isPaid;
+
+  void setPaidConfig(PaidVideoConfig? config) {
+    _paidConfig = config;
+    notifyListeners();
+  }
 
   // --- Series State ---
   // Episodes 2..N only. Episode 1 is always [_selectedVideo], which keeps a
@@ -261,6 +276,7 @@ class UploadStateManager extends ChangeNotifier {
     List<String>? allowedSubscribers,
     List<String>? targetProfessionIds,
     List<QuizModel>? quizzes,
+    String? videoType,
   }) async {
     if (_selectedVideo == null) {
       _setError('Please select a video first');
@@ -280,6 +296,8 @@ class UploadStateManager extends ChangeNotifier {
       allowedSubscribers: allowedSubscribers,
       targetProfessionIds: targetProfessionIds ?? const [],
       quizzes: quizzes,
+      paidAccess: _paidConfig?.toJson(),
+      videoType: videoType,
     );
     _lastRequest = request;
     _activeSeriesId = null;
@@ -526,6 +544,8 @@ class UploadStateManager extends ChangeNotifier {
       'quizzes': quizzes,
       'seriesId': seriesId,
       'episodeNumber': episodeNumber,
+      'paidAccess': request.paidAccess,
+      if (request.videoType != null) 'videoType': request.videoType,
     };
   }
 
@@ -690,6 +710,7 @@ class UploadStateManager extends ChangeNotifier {
     _lastRequest = null;
     _isBackgrounded = false;
     _eta.reset();
+    _paidConfig = null;
   }
 
   void _setError(String message) {

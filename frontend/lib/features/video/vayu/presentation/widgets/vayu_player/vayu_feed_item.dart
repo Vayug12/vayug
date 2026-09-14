@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/core/presentation/widgets/quiz_overlay.dart';
+import 'package:vayug/features/video/paid/presentation/widgets/paid_video_player_guard.dart';
 import 'package:vayug/features/video/vayu/presentation/widgets/vayu_player/vayu_player_layout.dart';
 import 'package:vayug/features/video/vayu/presentation/widgets/vayu_video_progress_bar.dart';
 import 'package:vayug/core/design/spacing.dart';
@@ -347,8 +348,11 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
     final leftPadding = playerInsets.left;
     final rightPadding = playerInsets.right;
 
-    return RepaintBoundary(
-      child: Stack(
+    return PaidVideoPlayerGuard(
+      video: widget.video,
+      controller: widget.controller,
+      child: RepaintBoundary(
+        child: Stack(
         fit: StackFit.passthrough,
         children: [
           // Background handled at the root build level.
@@ -768,6 +772,7 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
           ),
         ],
       ),
+    ),
     );
   }
 }

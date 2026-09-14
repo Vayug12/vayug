@@ -23,6 +23,7 @@ import 'package:vayug/features/profile/analytics/presentation/widgets/analytics_
 import 'package:vayug/core/providers/profile_providers.dart';
 import 'package:vayug/features/profile/core/presentation/screens/creator_tools_screen.dart';
 import 'package:vayug/features/profile/analytics/presentation/screens/notification_performance_screen.dart';
+import 'package:vayug/features/video/paid/data/services/paid_video_service.dart';
 
 class CreatorRevenueScreen extends ConsumerStatefulWidget {
   const CreatorRevenueScreen({super.key});
@@ -37,6 +38,7 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
   final AnalyticsService _analyticsService = AnalyticsService();
   
   Map<String, dynamic>? _revenueData;
+  Map<String, dynamic>? _paidSalesData;
   CreatorAnalytics? _analytics;
   List<RemovedVideo> _removedVideos = [];
   
@@ -67,6 +69,7 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
 
         await Future.wait([
           _fetchRevenueData(forceRefresh),
+          _fetchPaidVideoSales(),
           _fetchAnalytics(userId),
           _fetchRemovedVideos(),
           // We'll use a local fetch method to handle the async gap correctly
@@ -98,6 +101,17 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
       }
     } catch (e) {
       AppLogger.log('⚠️ Engagement load failed: $e');
+    }
+  }
+
+  Future<void> _fetchPaidVideoSales() async {
+    try {
+      final sales = await PaidVideoService.instance.getCreatorSales();
+      if (mounted) {
+        setState(() => _paidSalesData = sales);
+      }
+    } catch (e) {
+      AppLogger.log('⚠️ Paid video sales load failed: $e');
     }
   }
 
@@ -236,6 +250,8 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
         child: Column(
           children: [
             _buildRevenueOverviewCard(),
+            AppSpacing.vSpace24,
+            _buildPaidVideoSalesCard(),
             AppSpacing.vSpace24,
             _buildRevenueBreakdownCard(),
             AppSpacing.vSpace24,
@@ -655,6 +671,251 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaidVideoSalesCard() {
+    final summary = _paidSalesData?['summary'] as Map<String, dynamic>?;
+    final totalEarnings = (summary?['totalCreatorEarningsInr'] as num?)?.toDouble() ?? 0.0;
+    final totalGross = (summary?['totalGrossRevenueInr'] as num?)?.toDouble() ?? 0.0;
+    final totalUnlocks = (summary?['totalUnlocks'] as num?)?.toInt() ?? 0;
+    final uniqueBuyers = (summary?['uniqueBuyersCount'] as num?)?.toInt() ?? 0;
+
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.spacing5),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: AppColors.borderPrimary),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.squircle),
+                ),
+                child: const Icon(
+                  Icons.monetization_on_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              AppSpacing.hSpace8,
+              Expanded(
+                child: Text(
+                  "Paid Video Sales",
+                  style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.vSpace12,
+          Text(
+            "₹${totalEarnings.toStringAsFixed(2)}",
+            style: AppTypography.displaySmall.copyWith(
+              color: AppColors.success,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          AppSpacing.vSpace4,
+          Text(
+            "Gross: ₹${totalGross.toStringAsFixed(2)} · Settled 1st of month",
+            style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary),
+          ),
+          AppSpacing.vSpace16,
+          Row(
+            children: [
+              Expanded(
+                child: _buildRevenueStat("Total Unlocks", totalUnlocks.toString(), Icons.lock_open_rounded),
+              ),
+              Container(width: 1, height: 36, color: AppColors.borderPrimary),
+              Expanded(
+                child: _buildRevenueStat("Unique Buyers", uniqueBuyers.toString(), Icons.people_outline_rounded),
+              ),
+            ],
+          ),
+          AppSpacing.vSpace16,
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _showPaidVideoSalesSheet,
+              icon: const Icon(Icons.receipt_long_rounded, size: 18),
+              label: const Text("View Sales"),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPaidVideoSalesSheet() {
+    final sales = (_paidSalesData?['sales'] as List<dynamic>?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList() ??
+        [];
+
+    final summary = _paidSalesData?['summary'] as Map<String, dynamic>?;
+    final totalEarnings = (summary?['totalCreatorEarningsInr'] as num?)?.toDouble() ?? 0.0;
+
+    VayuBottomSheet.show(
+      context: context,
+      title: "Paid Video Sales",
+      icon: Icons.monetization_on_rounded,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: AppSpacing.edgeInsetsAll12,
+            decoration: BoxDecoration(
+              color: AppColors.backgroundPrimary,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: AppColors.borderPrimary),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+                AppSpacing.hSpace8,
+                Expanded(
+                  child: Text(
+                    "80% creator share automatically settled on the 1st of every month.",
+                    style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AppSpacing.vSpace16,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Total Earnings",
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+              ),
+              Text(
+                "₹${totalEarnings.toStringAsFixed(2)}",
+                style: AppTypography.titleMedium.copyWith(
+                  color: AppColors.success,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.vSpace16,
+          if (sales.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  "No paid video sales yet.",
+                  style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: sales.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final sale = sales[i];
+                  final title = (sale['videoTitle'] ?? 'Paid Video').toString();
+                  final price = (sale['priceAmountInr'] as num?)?.toDouble() ?? 0.0;
+                  final cut = (sale['creatorEarningsInr'] as num?)?.toDouble() ?? (price * 0.8);
+                  final date = sale['unlockedAt'] != null
+                      ? sale['unlockedAt'].toString().split('T').first
+                      : '';
+
+                  return Container(
+                    padding: AppSpacing.edgeInsetsAll12,
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundPrimary,
+                      borderRadius: BorderRadius.circular(AppRadius.card),
+                      border: Border.all(color: AppColors.borderPrimary),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.play_circle_fill_rounded, color: AppColors.primary, size: 28),
+                        AppSpacing.hSpace12,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: AppTypography.bodySmall.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (date.isNotEmpty)
+                                Text(
+                                  date,
+                                  style: AppTypography.labelSmall.copyWith(
+                                    color: AppColors.textTertiary,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        AppSpacing.hSpace8,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              "+₹${cut.toStringAsFixed(2)}",
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              "₹${price.toStringAsFixed(0)}",
+                              style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.textTertiary,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          AppSpacing.vSpace16,
+          SizedBox(
+            width: double.infinity,
+            child: AppButton(
+              onPressed: () => Navigator.pop(context),
+              label: "Close",
+            ),
+          ),
+          AppSpacing.vSpace8,
         ],
       ),
     );

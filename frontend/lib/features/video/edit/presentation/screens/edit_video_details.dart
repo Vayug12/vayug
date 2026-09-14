@@ -11,7 +11,7 @@ import 'package:vayug/shared/utils/app_logger.dart';
 import 'package:vayug/features/video/quiz/presentation/screens/create_quiz_screen.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
-import 'package:vayug/shared/widgets/multi_link_editor_sheet.dart';
+import 'package:vayug/shared/screens/promotional_links_screen.dart';
 
 class EditVideoDetails extends StatefulWidget {
   final VideoModel video;
@@ -534,7 +534,9 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
               _buildTextField(
                 controller: _titleController,
                 hintText: 'Give your video a catchy title',
-                maxLines: 2,
+                minLines: 1,
+                maxLines: 4,
+                keyboardType: TextInputType.multiline,
                 onChanged: (_) { setState(() {}); setModalState(() {}); },
               ),
               AppSpacing.vSpace24,
@@ -542,15 +544,23 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
               AppSpacing.vSpace8,
               InkWell(
                 onTap: () {
-                  MultiLinkEditorSheet.show(
+                  PromotionalLinksScreen.push(
                     context,
                     initialLinks: _links
-                        .map((l) => LinkItemData(url: l.url, title: l.title))
+                        .map((l) => LinkItemData(
+                              url: l.url,
+                              title: l.title,
+                              showAtSeconds: l.showAtSeconds,
+                            ))
                         .toList(),
                     onSave: (saved) {
                       setState(() {
                         _links = saved
-                            .map((item) => VideoLink(url: item.url, title: item.title))
+                            .map((item) => VideoLink(
+                                  url: item.url,
+                                  title: item.title,
+                                  showAtSeconds: item.showAtSeconds,
+                                ))
                             .toList();
                         _linkController.text =
                             _links.isNotEmpty ? _links.first.url : '';
@@ -821,6 +831,7 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
   Widget _buildTextField({
     required TextEditingController controller,
     required String hintText,
+    int? minLines,
     int? maxLines = 1,
     TextInputType? keyboardType,
     Function(String)? onChanged,
@@ -832,6 +843,7 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
         color: AppColors.textPrimary,
         fontSize: AppTypography.fontSizeBase,
       ),
+      minLines: minLines,
       maxLines: maxLines,
       keyboardType: keyboardType,
       decoration: InputDecoration(

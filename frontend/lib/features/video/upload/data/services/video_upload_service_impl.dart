@@ -96,6 +96,7 @@ class VideoUploadService implements IVideoUploadService {
         seriesId: metadata?['seriesId'] as String?,
         episodeNumber: metadata?['episodeNumber'] as int?,
         quizzes: (metadata?['quizzes'] as List?)?.cast<QuizModel>(),
+        paidAccess: metadata?['paidAccess'] as Map<String, dynamic>?,
         onProgress: (progress) {
           _progressController.add(progress);
         },

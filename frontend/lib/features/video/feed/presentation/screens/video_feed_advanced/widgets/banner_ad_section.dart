@@ -75,29 +75,6 @@ class _BannerAdSectionState extends State<BannerAdSection>
     super.dispose();
   }
 
-  Widget _buildPlaceholder() {
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Container(
-          width: double.infinity,
-          height: 30,
-          margin: const EdgeInsets.only(top: 20),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Center(
-            child: Text(
-              'Sponsored',
-              style: TextStyle(color: Colors.white24, fontSize: 9),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildAdContent(Map<String, dynamic> data) {
     AppLogger.log(
         '🔄 BannerAdSection: Showing custom backend ad: ${data['title'] ?? data['id']}');
@@ -115,7 +92,7 @@ class _BannerAdSectionState extends State<BannerAdSection>
   @override
   Widget build(BuildContext context) {
     if (widget.adData == null) {
-      return _buildPlaceholder();
+      return const SizedBox.shrink();
     }
 
     final data = widget.adData!;

@@ -260,6 +260,17 @@ class _VayuSubscribeGateState extends ConsumerState<VayuSubscribeGate> {
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.titleMedium,
                   ),
+                  if (creator.profession != null &&
+                      creator.profession!.trim().isNotEmpty)
+                    Text(
+                      creator.profession!.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: AppTypography.weightMedium,
+                      ),
+                    ),
                   Text(
                     '${FormatUtils.formatViews(creator.followerCount)} subscribers',
                     style: AppTypography.bodySmall

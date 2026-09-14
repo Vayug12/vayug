@@ -9,6 +9,7 @@ import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/shared/services/resource_upload_service.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+import 'package:vayug/shared/utils/url_utils.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 
 /// **MultiLinkEditorSheet - Clean, professional Apple HIG-compliant link & resource editor**
@@ -43,10 +44,10 @@ class MultiLinkEditorSheet extends StatefulWidget {
       backgroundColor: AppColors.backgroundSecondary,
       isScrollControlled: true,
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
       ),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.borderRadiusSheet,
       ),
       builder: (_) => MultiLinkEditorSheet(
         initialLinks: initialLinks,
@@ -63,13 +64,14 @@ class MultiLinkEditorSheet extends StatefulWidget {
 class _LinkControllers {
   final TextEditingController titleController;
   final TextEditingController urlController;
+  int showAtSeconds;
   bool isUploading = false;
   double uploadProgress = 0.0;
   String? attachedFileName;
   String? attachedFileSize;
   CancelToken? cancelToken;
 
-  _LinkControllers({String title = '', String url = ''})
+  _LinkControllers({String title = '', String url = '', this.showAtSeconds = 0})
       : titleController = TextEditingController(text: title),
         urlController = TextEditingController(text: url) {
     if (url.isNotEmpty) {
@@ -105,7 +107,11 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
     if (widget.initialLinks.isNotEmpty) {
       for (final link in widget.initialLinks) {
         _controllers.add(
-          _LinkControllers(title: link.title, url: link.url),
+          _LinkControllers(
+            title: link.title,
+            url: link.url,
+            showAtSeconds: link.showAtSeconds,
+          ),
         );
       }
     } else {
@@ -259,7 +265,6 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
   }
 
   void _handleSave() {
-    // Ensure no uploads are currently running
     for (final c in _controllers) {
       if (c.isUploading) {
         VayuSnackBar.showInfo(context, 'Please wait for files to finish uploading.');
@@ -288,11 +293,11 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
         formattedUrl = 'https://$formattedUrl';
       }
 
-      final uri = Uri.tryParse(formattedUrl);
-      if (uri == null || !uri.hasAuthority || !formattedUrl.contains('.')) {
+      final result = UrlUtils.validateUrl(formattedUrl);
+      if (!result.isValid) {
         VayuSnackBar.showError(
           context,
-          'Link ${i + 1} has an invalid URL (e.g. example.com)',
+          'Link ${i + 1}: ${result.userMessage}',
         );
         return;
       }
@@ -300,6 +305,7 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
       validLinks.add(LinkItemData(
         url: formattedUrl,
         title: title,
+        showAtSeconds: c.showAtSeconds,
       ));
     }
 
@@ -332,19 +338,19 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
       filled: true,
       fillColor: AppColors.backgroundSecondary,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: EdgeInsets.symmetric(horizontal: AppSpacing.space16, vertical: AppSpacing.space12),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.input),
         borderSide: const BorderSide(color: AppColors.borderSecondary),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.input),
         borderSide: BorderSide(
           color: AppColors.borderSecondary.withValues(alpha: 0.6),
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.input),
         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
     );
@@ -381,32 +387,22 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
             Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Promotional Links & Files',
-                        style: AppTypography.headlineSmall.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                        ),
-                      ),
-                      AppSpacing.vSpace4,
-                      Text(
-                        'Add up to ${widget.maxLinks} links, APKs, or documents.',
-                        style: AppTypography.labelSmall.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Promotional Links',
+                    style: AppTypography.headlineSmall.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, size: 20),
                   color: AppColors.textSecondary,
                   splashRadius: 22,
-                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                  constraints: const BoxConstraints(
+                    minWidth: AppSpacing.minTouchTargetApple,
+                    minHeight: AppSpacing.minTouchTargetApple,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -426,10 +422,10 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                   final hasFile = c.attachedFileName != null;
 
                   return Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: AppSpacing.edgeInsetsAll16,
                     decoration: BoxDecoration(
                       color: AppColors.backgroundPrimary,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                       border: Border.all(
                         color: AppColors.borderSecondary.withValues(alpha: 0.5),
                       ),
@@ -469,12 +465,15 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                             if (!c.isUploading)
                               InkWell(
                                 onTap: () => _pickAndUploadFile(c),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(AppRadius.button),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.space12,
+                                    vertical: AppSpacing.space4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: AppColors.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(AppRadius.button),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -484,13 +483,12 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                                         size: 14,
                                         color: AppColors.primaryLight,
                                       ),
-                                      const SizedBox(width: 4),
+                                      AppSpacing.hSpace4,
                                       Text(
                                         hasFile ? 'Change File' : 'Attach File',
                                         style: AppTypography.labelSmall.copyWith(
                                           color: AppColors.primaryLight,
                                           fontWeight: FontWeight.w600,
-                                          fontSize: 11,
                                         ),
                                       ),
                                     ],
@@ -515,10 +513,10 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                         // Uploading Progress Indicator
                         if (c.isUploading) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            padding: AppSpacing.edgeInsetsAll12,
                             decoration: BoxDecoration(
                               color: AppColors.backgroundSecondary,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(AppRadius.card),
                               border: Border.all(
                                 color: AppColors.primary.withValues(alpha: 0.3),
                               ),
@@ -539,7 +537,7 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                                     AppSpacing.hSpace8,
                                     Expanded(
                                       child: Text(
-                                        'Uploading file... ${(c.uploadProgress * 100).toInt()}%',
+                                        'Uploading... ${(c.uploadProgress * 100).toInt()}%',
                                         style: AppTypography.labelSmall.copyWith(
                                           color: AppColors.textPrimary,
                                           fontWeight: FontWeight.w500,
@@ -584,12 +582,15 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                         // Attached File Badge (if file attached)
                         if (hasFile && !c.isUploading) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.space12,
+                              vertical: AppSpacing.space8,
+                            ),
                             decoration: BoxDecoration(
-                              color: AppColors.backgroundSecondary.withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(10),
+                              color: AppColors.backgroundSecondary,
+                              borderRadius: BorderRadius.circular(AppRadius.input),
                               border: Border.all(
-                                color: AppColors.borderSecondary.withValues(alpha: 0.7),
+                                color: AppColors.borderSecondary,
                               ),
                             ),
                             child: Row(
@@ -653,12 +654,76 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                             hintText: 'https://example.com or attach file above',
                             prefixIcon: Icon(
                               hasFile
-                                  ? _getFileIcon(c.attachedFileName!)
-                                  : Icons.language_rounded,
+                                    ? _getFileIcon(c.attachedFileName!)
+                                    : Icons.language_rounded,
                               size: 18,
                               color: AppColors.textTertiary,
                             ),
                             controller: c.urlController,
+                          ),
+                        ),
+                        AppSpacing.vSpace8,
+
+                        // Appearance Timing Selector
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.space12,
+                            vertical: AppSpacing.space8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.backgroundSecondary,
+                            borderRadius: BorderRadius.circular(AppRadius.input),
+                            border: Border.all(
+                              color: AppColors.borderSecondary,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.timer_outlined, size: 14, color: AppColors.primaryLight),
+                                  AppSpacing.hSpace8,
+                                  Text(
+                                    'Show at',
+                                    style: AppTypography.labelSmall.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    c.showAtSeconds == 0
+                                        ? 'Start (0s)'
+                                        : '${c.showAtSeconds}s',
+                                    style: AppTypography.labelSmall.copyWith(
+                                      color: c.showAtSeconds > 0 ? AppColors.primaryLight : AppColors.textTertiary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  trackHeight: 2,
+                                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                                  activeTrackColor: AppColors.primaryLight,
+                                  inactiveTrackColor: AppColors.borderSecondary,
+                                  thumbColor: AppColors.primaryLight,
+                                ),
+                                child: Slider(
+                                  value: c.showAtSeconds.toDouble().clamp(0.0, 120.0),
+                                  min: 0,
+                                  max: 120,
+                                  divisions: 120,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      c.showAtSeconds = val.round();
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -673,14 +738,14 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
               AppSpacing.vSpace12,
               InkWell(
                 onTap: _addLink,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.button),
                 child: Container(
-                  height: 46,
+                  height: 52,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppRadius.button),
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.25),
+                      color: AppColors.primary.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -693,7 +758,7 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
                       ),
                       AppSpacing.hSpace8,
                       Text(
-                        'Add Another (${_controllers.length}/${widget.maxLinks})',
+                        'Add Link',
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.primaryLight,
                           fontWeight: FontWeight.w600,

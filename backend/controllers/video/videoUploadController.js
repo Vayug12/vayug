@@ -75,7 +75,7 @@ export const uploadVideo = async (req, res) => {
       return res.status(401).json({ error: 'Google ID not found in token' });
     }
 
-    const { videoName, description, videoType, link, category, tags, allowedSubscribers, targetProfessionIds } = req.body;
+    const { videoName, description, videoType, link, category, tags, allowedSubscribers, targetProfessionIds, paidAccess } = req.body;
 
     if (targetProfessionIds != null && (
       !Array.isArray(targetProfessionIds) ||
@@ -105,6 +105,33 @@ export const uploadVideo = async (req, res) => {
       console.log('❌ Upload: User not found with Google ID:', googleId);
       fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Parse and validate Paid Video configuration + Mandatory UPI requirement
+    let parsedPaidAccess = { isPaid: false };
+    if (paidAccess) {
+      let rawPaid = paidAccess;
+      if (typeof paidAccess === 'string') {
+        try { rawPaid = JSON.parse(paidAccess); } catch (_) {}
+      }
+      if (rawPaid && (rawPaid.isPaid === true || rawPaid.isPaid === 'true')) {
+        const upiId = user.paymentDetails?.upiId || (user.preferredPaymentMethod === 'upi' ? user.paymentDetails?.upiId : null);
+        if (!upiId || String(upiId).trim().length === 0) {
+          if (req.file?.path) fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            error: 'UPI ID is required to upload paid videos. Please add your UPI ID first.'
+          });
+        }
+        parsedPaidAccess = {
+          isPaid: true,
+          previewPercentage: Math.min(50, Math.max(10, parseInt(rawPaid.previewPercentage) || 20)),
+          priceTier: rawPaid.priceTier ? String(rawPaid.priceTier).trim() : null,
+          priceAmount: Math.max(0, parseFloat(rawPaid.priceAmount) || 0),
+          creatorTargetPrice: Math.max(0, parseFloat(rawPaid.creatorTargetPrice) || 0),
+          totalPurchases: 0,
+          totalRevenue: 0
+        };
+      }
     }
 
     // 4. Calculate video hash for duplicate detection
@@ -206,7 +233,8 @@ export const uploadVideo = async (req, res) => {
       finalScore: initialScore,
       // **NEW: Subscriber-only access control**
       allowedSubscribers: Array.isArray(allowedSubscribers) ? allowedSubscribers : [],
-      isSubscriberOnly: isSubOnly
+      isSubscriberOnly: isSubOnly,
+      paidAccess: parsedPaidAccess
     });
 
     await saveVideoWithDailyQuota(video);

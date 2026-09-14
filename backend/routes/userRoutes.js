@@ -234,7 +234,7 @@ router.get('/profile', verifyToken, async (req, res) => {
     // **IDENTITY OPTIMIZATION: Use req.user._id if available**
     const query = req.user?._id ? { _id: req.user._id } : { googleId: currentUserId };
     const currentUser = await User.findOne(query)
-      .select('_id googleId name email profilePic professionId websiteUrl videos followingCount followerCount preferredCurrency preferredPaymentMethod country authProvider phoneNumber phoneVerifiedAt isSyntheticEmail')
+      .select('_id googleId name email profilePic professionId websiteUrl videos followingCount followerCount preferredCurrency preferredPaymentMethod country authProvider phoneNumber phoneVerifiedAt isSyntheticEmail paymentDetails')
       .lean();
     
     if (!currentUser) {
@@ -291,6 +291,7 @@ router.get('/profile', verifyToken, async (req, res) => {
       preferredCurrency: currentUser.preferredCurrency,
       preferredPaymentMethod: currentUser.preferredPaymentMethod,
       country: currentUser.country,
+      paymentDetails: currentUser.paymentDetails || null,
       rank: ownRank,
     };
 
@@ -1317,7 +1318,7 @@ router.get('/suggested-creators', verifyToken, async (req, res) => {
       .filter(Boolean);
     const creatorUsers = candidateIds.length > 0
       ? await User.find({ _id: { $in: candidateIds } })
-          .select('googleId name profilePic followerCount createdAt')
+          .select('googleId name profilePic followerCount professionId createdAt')
           .lean()
       : [];
     const rankedCreators = rankCreatorSuggestions({
@@ -1334,12 +1335,17 @@ router.get('/suggested-creators', verifyToken, async (req, res) => {
 
     res.json({
       success: true,
-      creators: page.creators.map((c) => ({
-        id: c.googleId || c._id.toString(),
-        name: c.name || 'Creator',
-        profilePic: c.profilePic || '',
-        followerCount: c.followerCount || 0,
-      })),
+      creators: page.creators.map((c) => {
+        const professionObj = c.professionId ? getProfessionById(c.professionId) : null;
+        return {
+          id: c.googleId || c._id.toString(),
+          name: c.name || 'Creator',
+          profilePic: c.profilePic || '',
+          followerCount: c.followerCount || 0,
+          professionId: c.professionId || null,
+          profession: professionObj ? professionObj.label : null,
+        };
+      }),
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,
       followingCount: followDocs.length,

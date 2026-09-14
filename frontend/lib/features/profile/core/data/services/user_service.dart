@@ -679,12 +679,16 @@ class SuggestedCreator {
   final String name;
   final String profilePic;
   final int followerCount;
+  final String? professionId;
+  final String? profession;
 
   const SuggestedCreator({
     required this.id,
     required this.name,
     required this.profilePic,
     required this.followerCount,
+    this.professionId,
+    this.profession,
   });
 
   factory SuggestedCreator.fromJson(Map<String, dynamic> json) {
@@ -693,6 +697,8 @@ class SuggestedCreator {
       name: json['name']?.toString() ?? 'Creator',
       profilePic: json['profilePic']?.toString() ?? '',
       followerCount: int.tryParse(json['followerCount']?.toString() ?? '') ?? 0,
+      professionId: json['professionId']?.toString(),
+      profession: json['profession']?.toString(),
     );
   }
 }

@@ -34,6 +34,7 @@ abstract class IVideoService {
     List<String>? allowedSubscribers,
     List<String>? targetProfessionIds,
     File? thumbnailFile,
+    Map<String, dynamic>? paidAccess,
   });
 
   Future<VideoModel> toggleLike(String videoId);

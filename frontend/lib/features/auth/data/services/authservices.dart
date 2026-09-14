@@ -913,6 +913,7 @@ class AuthService implements IAuthService {
               'name': data['name'],
               'email': data['email'],
               'profilePic': data['profilePic'],
+              'paymentDetails': data['paymentDetails'],
               'token': token,
               'isFallback': true,
             };
@@ -1049,6 +1050,7 @@ class AuthService implements IAuthService {
             'authProvider': userData['authProvider'],
             'phoneNumber': userData['phoneNumber'],
             'phoneVerified': userData['phoneVerified'] == true,
+            'paymentDetails': userData['paymentDetails'],
           };
           await prefs.setString('fallback_user', jsonEncode(fallbackData));
           AppLogger.log('✅ Updated fallback_user with fresh backend data');
@@ -1064,6 +1066,7 @@ class AuthService implements IAuthService {
             'authProvider': userData['authProvider'],
             'phoneNumber': userData['phoneNumber'],
             'phoneVerified': userData['phoneVerified'] == true,
+            'paymentDetails': userData['paymentDetails'],
             'token': token,
           };
         } else {

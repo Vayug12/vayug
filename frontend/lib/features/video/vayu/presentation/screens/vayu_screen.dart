@@ -53,13 +53,10 @@ class VayuScreenState extends ConsumerState<VayuScreen> {
   bool _isOfflineMode = false;
   bool? _wasSignedIn;
 
-  // **GATE: the feed is built from subscriptions, so it stays locked until the
-  // user follows kMinSubscriptions creators.**
+  // **GATE: the feed stays locked until the user follows kMinSubscriptions creators.**
   bool _isGateLocked = false;
   int _followingCount = 0;
   bool _requiresSignIn = false;
-
-  // Banner Ad State
 
   @override
   void initState() {
@@ -79,6 +76,7 @@ class VayuScreenState extends ConsumerState<VayuScreen> {
     if (_scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 200 &&
         !_isLoading &&
+        !_isLoadingMore &&
         _hasMore) {
       _loadMoreVideos();
     }
@@ -94,7 +92,7 @@ class VayuScreenState extends ConsumerState<VayuScreen> {
         _currentPage = 1;
         _hasMore = true;
         _errorMessage = null;
-        _isOfflineMode = false; // Updated
+        _isOfflineMode = false;
       });
     } else {
       setState(() {
@@ -105,7 +103,7 @@ class VayuScreenState extends ConsumerState<VayuScreen> {
 
     try {
       AppLogger.log(
-          '🎬 VayuScreen: Loading subscribed videos - Cursor: ${_nextCursor ?? "none"}');
+          '🎬 VayuScreen: Loading videos - Cursor: ${_nextCursor ?? "none"}');
       final result = await _videoService.getFollowingVideos(
         limit: 10,
         cursor: refresh ? null : _nextCursor,

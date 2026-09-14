@@ -12,10 +12,12 @@ import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 class LinkItemData {
   final String url;
   final String title;
+  final int showAtSeconds;
 
   const LinkItemData({
     required this.url,
     this.title = '',
+    this.showAtSeconds = 0,
   });
 
   /// Displays the custom title if provided, otherwise extracts a clean host
@@ -107,15 +109,42 @@ class LinksBottomSheet extends StatelessWidget {
     AppLogger.log('🔗 LinksBottomSheet: Launching URL: $enrichedUrl');
     try {
       final uri = Uri.tryParse(enrichedUrl);
-      if (uri != null && await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else if (context.mounted) {
-        VayuSnackBar.showError(context, 'Could not open link in browser.');
+      if (uri == null) {
+        if (context.mounted) {
+          VayuSnackBar.showError(context, 'This link format is invalid and cannot be opened.');
+        }
+        return;
+      }
+
+      if (!await canLaunchUrl(uri)) {
+        if (context.mounted) {
+          final scheme = uri.scheme.toLowerCase();
+          if (scheme != 'http' && scheme != 'https') {
+            VayuSnackBar.showError(context, 'This link type is not supported.');
+          } else {
+            VayuSnackBar.showError(
+              context,
+              'No browser found to open this link. Please check if a browser app is installed.',
+            );
+          }
+        }
+        return;
+      }
+
+      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!success && context.mounted) {
+        VayuSnackBar.showError(
+          context,
+          'Could not open link. The website may be down or temporarily unavailable.',
+        );
       }
     } catch (e) {
       AppLogger.log('❌ LinksBottomSheet: Error launching link: $e');
       if (context.mounted) {
-        VayuSnackBar.showError(context, 'Error opening link.');
+        VayuSnackBar.showError(
+          context,
+          'An unexpected error occurred while opening the link.',
+        );
       }
     }
   }

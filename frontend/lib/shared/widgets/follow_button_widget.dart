@@ -11,12 +11,30 @@ class FollowButtonWidget extends ConsumerStatefulWidget {
   final String uploaderId;
   final String uploaderName;
   final VoidCallback? onFollowChanged;
+  final bool isFullWidth;
+
+  /// Optional color overrides for profile-specific styling.
+  final Color? activeBackgroundColor;
+  final Color? activeTextColor;
+  final Color? activeBorderColor;
+  final Color? inactiveBackgroundColor;
+  final Color? inactiveTextColor;
+  final Color? inactiveBorderColor;
+  final double? height;
 
   const FollowButtonWidget({
     super.key,
     required this.uploaderId,
     required this.uploaderName,
     this.onFollowChanged,
+    this.isFullWidth = false,
+    this.activeBackgroundColor,
+    this.activeTextColor,
+    this.activeBorderColor,
+    this.inactiveBackgroundColor,
+    this.inactiveTextColor,
+    this.inactiveBorderColor,
+    this.height,
   });
 
   @override
@@ -281,6 +299,14 @@ class _FollowButtonWidgetState extends ConsumerState<FollowButtonWidget> {
                           isSubscribed: effectiveIsFollowing,
                           isLoading: isLoading,
                           onPressed: _handleFollowTap,
+                          isFullWidth: widget.isFullWidth,
+                          height: widget.height,
+                          activeBackgroundColor: widget.activeBackgroundColor,
+                          activeTextColor: widget.activeTextColor,
+                          activeBorderColor: widget.activeBorderColor,
+                          inactiveBackgroundColor: widget.inactiveBackgroundColor,
+                          inactiveTextColor: widget.inactiveTextColor,
+                          inactiveBorderColor: widget.inactiveBorderColor,
                         );
                       });
                 });

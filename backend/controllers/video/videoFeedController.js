@@ -486,7 +486,6 @@ export const getFollowingFeed = async (req, res) => {
     }
 
     const query = withProfessionEligibility({
-      uploader: { $in: followingIds },
       videoType,
       processingStatus: 'completed',
       // Exclusive uploads are visible only to the creator's allowed subscribers.

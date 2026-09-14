@@ -14,7 +14,7 @@ import 'package:vayug/shared/utils/app_text.dart';
 import 'package:vayug/shared/widgets/profession_picker_sheet.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
-import 'package:vayug/shared/widgets/multi_link_editor_sheet.dart';
+import 'package:vayug/shared/screens/promotional_links_screen.dart';
 
 class UploadAdvancedSettingsScreen extends StatefulWidget {
   final TextEditingController linkController;
@@ -298,14 +298,22 @@ class _UploadAdvancedSettingsScreenState extends State<UploadAdvancedSettingsScr
             ? [VideoLink(url: widget.linkController.text.trim())]
             : <VideoLink>[]);
 
-    MultiLinkEditorSheet.show(
+    PromotionalLinksScreen.push(
       context,
       initialLinks: currentLinks
-          .map((l) => LinkItemData(url: l.url, title: l.title))
+          .map((l) => LinkItemData(
+                url: l.url,
+                title: l.title,
+                showAtSeconds: l.showAtSeconds,
+              ))
           .toList(),
       onSave: (saved) {
         final videoLinks = saved
-            .map((item) => VideoLink(url: item.url, title: item.title))
+            .map((item) => VideoLink(
+                  url: item.url,
+                  title: item.title,
+                  showAtSeconds: item.showAtSeconds,
+                ))
             .toList();
         if (widget.linksNotifier != null) {
           widget.linksNotifier!.value = videoLinks;

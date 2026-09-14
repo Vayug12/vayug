@@ -31,7 +31,7 @@ class CreatorSuggestionsRail extends ConsumerStatefulWidget {
 class _CreatorSuggestionsRailState
     extends ConsumerState<CreatorSuggestionsRail> {
   static const int _pageSize = 12;
-  static const double _cardWidth = 112;
+  static const double _cardWidth = 116;
   static const double _avatarRadius = 24;
   static const double _buttonHeight = 32;
 
@@ -229,6 +229,8 @@ class _CreatorSuggestionsRailState
   Widget _buildCreatorCard(SuggestedCreator creator) {
     final isSubscribed = _subscribedIds.contains(creator.id);
     final isPending = _pendingIds.contains(creator.id);
+    final hasProfession = creator.profession != null &&
+        creator.profession!.trim().isNotEmpty;
 
     return InteractiveScaleButton(
       onTap: () => _openProfile(creator),
@@ -265,6 +267,21 @@ class _CreatorSuggestionsRailState
                 textAlign: TextAlign.center,
                 style: AppTypography.titleMedium.copyWith(height: 1.2),
               ),
+              if (hasProfession) ...[
+                const SizedBox(height: 2),
+                Text(
+                  creator.profession!.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                    fontWeight: AppTypography.weightMedium,
+                    height: 1.2,
+                  ),
+                ),
+              ],
               Text(
                 '${FormatUtils.formatViews(creator.followerCount)} subs',
                 maxLines: 1,

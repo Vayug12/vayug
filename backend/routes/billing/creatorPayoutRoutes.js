@@ -1,6 +1,7 @@
 import express from 'express';
 import CreatorPayout from '../../models/CreatorPayout.js';
 import User from '../../models/User.js';
+import PaidVideoTransaction from '../../models/PaidVideoTransaction.js';
 import { verifyToken } from '../../utils/verifytoken.js';
 import requireAdminDashboardKey from '../../middleware/adminDashboardAuth.js';
 
@@ -61,11 +62,17 @@ router.get('/profile', verifyToken, async (req, res) => {
     const isFirstPayout = existingPayouts === 0;
     const payoutCount = existingPayouts;
 
-    /* console.log('🔍 Payout info:', {
-      existingPayouts,
-      isFirstPayout,
-      payoutCount
-    }); */
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const [paidTotal, paidMonth] = await Promise.all([
+      PaidVideoTransaction.aggregate([
+        { $match: { creatorId: user._id, status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$creatorShareAmount' }, count: { $sum: 1 } } }
+      ]),
+      PaidVideoTransaction.aggregate([
+        { $match: { creatorId: user._id, month: currentMonth, status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$creatorShareAmount' }, count: { $sum: 1 } } }
+      ])
+    ]);
 
     const response = {
       creator: {
@@ -81,6 +88,12 @@ router.get('/profile', verifyToken, async (req, res) => {
       // **NEW: Include payment details for frontend validation**
       paymentDetails: user.paymentDetails || null,
       paymentMethods: _getAvailablePaymentMethods(user.country || 'IN'),
+      paidVideoEarnings: {
+        totalEarnings: Math.round((paidTotal[0]?.total || 0) * 100) / 100,
+        totalPurchases: paidTotal[0]?.count || 0,
+        thisMonthEarnings: Math.round((paidMonth[0]?.total || 0) * 100) / 100,
+        thisMonthPurchases: paidMonth[0]?.count || 0
+      },
       // **NEW: Dynamic thresholds based on payout count**
       thresholds: {
         firstPayout: {

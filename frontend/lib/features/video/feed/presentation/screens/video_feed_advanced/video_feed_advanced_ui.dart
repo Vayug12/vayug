@@ -797,7 +797,16 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     bool isActive,
     int index,
   ) {
-    return _buildVideoPageContent(video, controller, isActive, index);
+    final bool isCreator = _currentUserId != null &&
+        (video.uploader.googleId == _currentUserId ||
+            video.uploader.id == _currentUserId);
+
+    return PaidVideoPlayerGuard(
+      video: video,
+      controller: controller,
+      isCreator: isCreator,
+      child: _buildVideoPageContent(video, controller, isActive, index),
+    );
   }
 
   Widget _buildVideoPageContent(
@@ -1906,25 +1915,39 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
           ),
         );
 
-        // **VISIT NOW PROTECTION: Always show button if it exists, even if overlay hides**
+        // **VISIT NOW PROTECTION: Show button when position >= showAtSeconds**
+        final int linkShowAtSeconds = video.validLinks.isNotEmpty
+            ? video.validLinks.first.showAtSeconds
+            : 0;
+
         final visitNowButton = video.hasLink
-            ? Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  bottom: bottomPadding + 16,
-                ),
-                child: SizedBox(
-                  width: (_screenWidth ?? MediaQuery.of(context).size.width) *
-                      0.75,
-                  child: AppButton(
-                    label: 'Visit Now',
-                    onPressed: () => _handleVisitNow(video),
-                    icon: const Icon(Icons.open_in_new,
-                        size: 14, color: AppColors.white),
-                    variant: AppButtonVariant.secondary,
-                    size: AppButtonSize.small,
-                  ),
-                ),
+            ? ValueListenableBuilder<VideoPlayerValue>(
+                valueListenable: (controller != null &&
+                        SharedVideoControllerPool().isControllerValid(controller))
+                    ? controller
+                    : ValueNotifier(const VideoPlayerValue.uninitialized()),
+                builder: (context, val, _) {
+                  if (val.position.inSeconds < linkShowAtSeconds) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      bottom: bottomPadding + 16,
+                    ),
+                    child: SizedBox(
+                      width: (_screenWidth ?? MediaQuery.of(context).size.width) *
+                          0.75,
+                      child: FeedVisitNowButton(
+                        url: video.validLinks.isNotEmpty
+                            ? video.validLinks.first.url
+                            : (video.link ?? ''),
+                        variant: AppButtonVariant.secondary,
+                        size: AppButtonSize.small,
+                      ),
+                    ),
+                  );
+                },
               )
             : const SizedBox.shrink();
 
@@ -2874,13 +2897,23 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (widget.video.hasLink)
-                              AppButton(
-                                label: 'Visit Now',
-                                onPressed: widget.onVisitNow,
-                                icon: const Icon(Icons.open_in_new,
-                                    size: 14, color: AppColors.white),
-                                variant: AppButtonVariant.secondary,
-                                size: AppButtonSize.small,
+                              ValueListenableBuilder<VideoPlayerValue>(
+                                valueListenable: widget.controller,
+                                builder: (context, val, _) {
+                                  final int minShow = widget.video.validLinks.isNotEmpty
+                                      ? widget.video.validLinks.first.showAtSeconds
+                                      : 0;
+                                  if (val.position.inSeconds < minShow) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return FeedVisitNowButton(
+                                    url: widget.video.validLinks.isNotEmpty
+                                        ? widget.video.validLinks.first.url
+                                        : (widget.video.link ?? ''),
+                                    variant: AppButtonVariant.secondary,
+                                    size: AppButtonSize.small,
+                                  );
+                                },
                               ),
                             if (isQuizVisible) ...[
                               const SizedBox(height: 12.0),

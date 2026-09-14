@@ -3,10 +3,12 @@ import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 class VideoLink {
   final String url;
   final String title;
+  final int showAtSeconds;
 
   const VideoLink({
     required this.url,
     this.title = '',
+    this.showAtSeconds = 0,
   });
 
   String get displayTitle {
@@ -24,7 +26,11 @@ class VideoLink {
     return url.trim();
   }
 
-  LinkItemData toLinkItemData() => LinkItemData(url: url, title: title);
+  LinkItemData toLinkItemData() => LinkItemData(
+        url: url,
+        title: title,
+        showAtSeconds: showAtSeconds,
+      );
 
   factory VideoLink.fromJson(dynamic json) {
     if (json is String) {
@@ -33,7 +39,10 @@ class VideoLink {
     if (json is Map) {
       final url = (json['url'] ?? json['link'] ?? '').toString().trim();
       final title = (json['title'] ?? json['label'] ?? '').toString().trim();
-      return VideoLink(url: url, title: title);
+      final showAtSeconds = int.tryParse(
+              (json['showAtSeconds'] ?? json['timestamp'] ?? 0).toString()) ??
+          0;
+      return VideoLink(url: url, title: title, showAtSeconds: showAtSeconds);
     }
     return const VideoLink(url: '');
   }
@@ -41,6 +50,50 @@ class VideoLink {
   Map<String, dynamic> toJson() => {
     'title': title,
     'url': url,
+    'showAtSeconds': showAtSeconds,
+  };
+}
+
+class PaidAccessModel {
+  final bool isPaid;
+  final int previewPercentage;
+  final String? priceTier;
+  final double priceAmount;
+  final double creatorTargetPrice;
+  final int totalPurchases;
+
+  const PaidAccessModel({
+    required this.isPaid,
+    this.previewPercentage = 20,
+    this.priceTier,
+    this.priceAmount = 0.0,
+    this.creatorTargetPrice = 0.0,
+    this.totalPurchases = 0,
+  });
+
+  factory PaidAccessModel.fromJson(dynamic json) {
+    if (json is! Map) return const PaidAccessModel(isPaid: false);
+    return PaidAccessModel(
+      isPaid: json['isPaid'] == true || json['isPaid'] == 'true',
+      previewPercentage:
+          int.tryParse(json['previewPercentage']?.toString() ?? '20') ?? 20,
+      priceTier: json['priceTier']?.toString(),
+      priceAmount:
+          double.tryParse(json['priceAmount']?.toString() ?? '0') ?? 0.0,
+      creatorTargetPrice:
+          double.tryParse(json['creatorTargetPrice']?.toString() ?? '0') ?? 0.0,
+      totalPurchases:
+          int.tryParse(json['totalPurchases']?.toString() ?? '0') ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'isPaid': isPaid,
+    'previewPercentage': previewPercentage,
+    'priceTier': priceTier,
+    'priceAmount': priceAmount,
+    'creatorTargetPrice': creatorTargetPrice,
+    'totalPurchases': totalPurchases,
   };
 }
 
@@ -96,6 +149,8 @@ class VideoModel {
   final int? episodeNumber;
   // **NEW: Interactive Quizzes**
   final List<QuizModel>? quizzes;
+  // **NEW: Paid Video Access Configuration**
+  final PaidAccessModel? paidAccess;
 
   VideoModel({
     required this.id,
@@ -139,7 +194,10 @@ class VideoModel {
     this.isSubscriberOnly = false, // **NEW: Default to false**
     this.crossPostStatus,
     this.crossPostDetails,
+    this.paidAccess,
   });
+
+  bool get isPaidVideo => paidAccess?.isPaid == true;
 
   List<VideoLink> get validLinks =>
       links.where((l) => l.url.trim().isNotEmpty).toList();
@@ -198,6 +256,7 @@ class VideoModel {
     bool? isSubscriberOnly,
     Map<String, String>? crossPostStatus,
     Map<String, dynamic>? crossPostDetails,
+    PaidAccessModel? paidAccess,
   }) {
     return VideoModel(
       id: id ?? this.id,
@@ -240,6 +299,7 @@ class VideoModel {
       isSubscriberOnly: isSubscriberOnly ?? this.isSubscriberOnly,
       crossPostStatus: crossPostStatus ?? this.crossPostStatus,
       crossPostDetails: crossPostDetails ?? this.crossPostDetails,
+      paidAccess: paidAccess ?? this.paidAccess,
     );
   }
 
@@ -559,6 +619,9 @@ class VideoModel {
           }
           return null;
         }(),
+        paidAccess: json['paidAccess'] != null
+            ? PaidAccessModel.fromJson(json['paidAccess'])
+            : null,
       );
     } catch (e) {
       

@@ -3,7 +3,7 @@ import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
-import 'package:vayug/shared/widgets/multi_link_editor_sheet.dart';
+import 'package:vayug/shared/screens/promotional_links_screen.dart';
 
 /// **AdMultiLinkField - Sub-widget for advertiser multi-link input**
 ///
@@ -67,7 +67,7 @@ class AdMultiLinkField extends StatelessWidget {
           AppSpacing.hSpace8,
           TextButton(
             onPressed: () {
-              MultiLinkEditorSheet.show(
+              PromotionalLinksScreen.push(
                 context,
                 initialLinks: links,
                 onSave: onLinksChanged,

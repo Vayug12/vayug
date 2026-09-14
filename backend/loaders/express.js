@@ -28,6 +28,7 @@ import videoGenRoutes from '../routes/videoGenRoutes.js';
 import revenuecatWebhookRoutes from '../routes/webhooks/revenuecatRoutes.js';
 import attributionRoutes from '../routes/attributionRoutes.js';
 import professionRoutes from '../routes/professionRoutes.js';
+import paidVideoRoutes from '../routes/video/paidVideoRoutes.js';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from '../middleware/errorHandler.js';
@@ -215,6 +216,7 @@ export default async ({ app }) => {
   apiRouter.use('/video-gen', videoGenRoutes);
   apiRouter.use('/attribution', attributionRoutes);
   apiRouter.use('/professions', professionRoutes);
+  apiRouter.use('/paid-videos', paidVideoRoutes);
 
   // Apply Passive Auth BEFORE Rate Limiter
   app.use('/api', apiVersioning, passiveVerifyToken, versionTracking, activityTracking, apiLimiter, apiRouter);

@@ -772,6 +772,7 @@ class VideoService implements IVideoService {
     List<String>? allowedSubscribers,
     List<String>? targetProfessionIds,
     File? thumbnailFile,
+    Map<String, dynamic>? paidAccess,
   }) async {
     try {
       AppLogger.log('🚀 VideoService: Starting video upload...');
@@ -823,6 +824,7 @@ class VideoService implements IVideoService {
         allowedSubscribers: allowedSubscribers,
         targetProfessionIds: targetProfessionIds,
         thumbnailFile: thumbnailFile,
+        paidAccess: paidAccess,
       );
     } catch (e) {
       if (e is DioException && e.type == DioExceptionType.cancel) {
@@ -854,6 +856,7 @@ class VideoService implements IVideoService {
     List<String>? allowedSubscribers,
     List<String>? targetProfessionIds,
     File? thumbnailFile,
+    Map<String, dynamic>? paidAccess,
   }) async {
     File? encryptedTempFile;
     try {
@@ -980,6 +983,7 @@ class VideoService implements IVideoService {
           'quizzes': quizzes?.map((q) => q.toJson()).toList(),
           'allowedSubscribers': allowedSubscribers,
           'targetProfessionIds': targetProfessionIds ?? const <String>[],
+          'paidAccess': paidAccess,
         },
       );
 

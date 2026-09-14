@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/radius.dart';
-import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/shared/utils/app_text.dart';
 
@@ -16,12 +15,29 @@ class SubscribeButtonWidget extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isFullWidth;
 
+  /// Optional color overrides for profile-specific styling.
+  /// When null, falls back to default dark theme colors.
+  final Color? activeBackgroundColor;
+  final Color? activeTextColor;
+  final Color? activeBorderColor;
+  final Color? inactiveBackgroundColor;
+  final Color? inactiveTextColor;
+  final Color? inactiveBorderColor;
+  final double? height;
+
   const SubscribeButtonWidget({
     super.key,
     required this.isSubscribed,
     required this.onPressed,
     this.isLoading = false,
     this.isFullWidth = false,
+    this.activeBackgroundColor,
+    this.activeTextColor,
+    this.activeBorderColor,
+    this.inactiveBackgroundColor,
+    this.inactiveTextColor,
+    this.inactiveBorderColor,
+    this.height,
   });
 
   @override
@@ -30,6 +46,17 @@ class SubscribeButtonWidget extends StatelessWidget {
     final label = AppText.get(
       isSubscribed ? 'btn_subscribed' : 'btn_subscribe',
     );
+
+    // Resolve colors: use overrides when provided, else default dark theme
+    final bgColor = isSubscribed
+        ? (inactiveBackgroundColor ?? AppColors.backgroundTertiary.withValues(alpha: 0.6))
+        : (activeBackgroundColor ?? AppColors.backgroundSecondary.withValues(alpha: 0.85));
+    final textColor = isSubscribed
+        ? (inactiveTextColor ?? AppColors.white)
+        : (activeTextColor ?? AppColors.white);
+    final borderColor = isSubscribed
+        ? (inactiveBorderColor ?? Colors.white12)
+        : (activeBorderColor ?? Colors.white24);
 
     final button = Semantics(
       button: true,
@@ -41,20 +68,17 @@ class SubscribeButtonWidget extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          constraints: BoxConstraints(
-            minHeight: 26.r,
-          ),
+          height: height,
+          constraints: height == null ? BoxConstraints(minHeight: 26.r) : null,
           padding: EdgeInsets.symmetric(
-            horizontal: 10.r,
-            vertical: AppSpacing.spacing1,
+            horizontal: 8.r,
+            vertical: 0,
           ),
           decoration: BoxDecoration(
-            color: isSubscribed
-                ? AppColors.backgroundTertiary.withValues(alpha: 0.6)
-                : AppColors.backgroundSecondary.withValues(alpha: 0.85),
+            color: bgColor,
             borderRadius: BorderRadius.circular(AppRadius.pill),
             border: Border.all(
-              color: isSubscribed ? Colors.white12 : Colors.white24,
+              color: borderColor,
               width: 0.8,
             ),
           ),
@@ -63,12 +87,12 @@ class SubscribeButtonWidget extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isLoading)
-                const SizedBox(
+                SizedBox(
                   width: 12,
                   height: 12,
                   child: CircularProgressIndicator(
                     strokeWidth: 1.5,
-                    color: AppColors.white,
+                    color: textColor,
                   ),
                 )
               else
@@ -78,10 +102,10 @@ class SubscribeButtonWidget extends StatelessWidget {
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.white,
-                    fontWeight: AppTypography.weightSemiBold,
-                    fontSize: 11.5.sp,
-                    letterSpacing: 0.2,
+                    color: textColor,
+                    fontWeight: AppTypography.weightBold,
+                    fontSize: 14.5.sp,
+                    letterSpacing: 0.1,
                   ),
                 ),
             ],

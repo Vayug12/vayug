@@ -23,11 +23,16 @@ import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 import 'package:vayug/features/video/upload/presentation/screens/upload_advanced_settings_screen.dart';
 import 'package:vayug/features/video/upload/presentation/screens/series_episodes_screen.dart';
 import 'package:vayug/features/video/upload/domain/models/episode_draft.dart';
+import 'package:vayug/features/video/upload/presentation/widgets/video_orientation_dialog.dart';
 // AI Video generation is not completed yet — screen hidden from UI.
 // import 'package:vayug/features/video/upload/presentation/screens/ai_video_generate_screen.dart';
 import 'package:vayug/shared/constants/interests.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
+import 'package:vayug/features/video/paid/domain/models/paid_video_config.dart';
+import 'package:vayug/features/video/paid/presentation/widgets/paid_video_config_sheet.dart';
+import 'package:vayug/features/video/paid/presentation/widgets/upi_setup_dialog.dart';
 import 'package:vayug/core/design/spacing.dart';
+import 'package:vayug/core/design/radius.dart';
 import 'package:video_player/video_player.dart';
 
 class UploadScreen extends ConsumerStatefulWidget {
@@ -149,6 +154,55 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     }
   }
 
+  Future<void> _pickPaidVideo() async {
+    if (ref.read(uploadStateManagerProvider).isUploadInFlight) {
+      VayuSnackBar.showInfo(context,
+          'An upload is still running. You can start the next one as soon as it finishes.');
+      return;
+    }
+
+    final userData = await _authService.getUserData();
+    if (userData == null) {
+      _showLoginPrompt();
+      return;
+    }
+
+    // Mandatory UPI verification before uploading paid videos
+    final hasUpi = await UpiSetupDialog.ensureUpiAvailable(context);
+    if (!mounted || !hasUpi) return;
+
+    try {
+      final result = await _filePickerService.pickFiles(
+        type: FileType.custom,
+        allowMultiple: false,
+        allowedExtensions: ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'],
+      );
+
+      if (result != null && mounted) {
+        final pickedFile = File(result.files.single.path!);
+
+        // Configure price tier & preview percentage
+        final currentConfig = ref.read(uploadStateManagerProvider).paidConfig ??
+            const PaidVideoConfig(isPaid: true);
+        final config = await PaidVideoConfigSheet.show(
+          context,
+          initialConfig: currentConfig,
+        );
+
+        if (config == null || !mounted) return;
+
+        final manager = ref.read(uploadStateManagerProvider);
+        manager.setVideo(pickedFile);
+        manager.setPaidConfig(config);
+        _titleController.text = _deriveTitleFromFile(pickedFile);
+        _showUploadForm.value = true;
+        _probeVideoMetadata(pickedFile);
+      }
+    } catch (e) {
+      AppLogger.log('Error picking paid video: $e');
+    }
+  }
+
   /// Reads duration and aspect ratio from the picked file. The quiz editor
   /// derives its per-video quiz limit from this duration, so without it the
   /// limit is computed from 0s and blocks quiz creation.
@@ -179,6 +233,23 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   }
 
   Future<void> _uploadVideo() async {
+    final choice = await VideoOrientationDialog.show(
+      context,
+      detectedAspectRatio: _videoAspectRatio.value,
+    );
+    if (choice == null || !mounted) return;
+
+    final isLandscape = choice == VideoOrientationChoice.landscape;
+    if (isLandscape) {
+      if (_videoAspectRatio.value < 1.0) {
+        _videoAspectRatio.value = 16 / 9;
+      }
+    } else {
+      if (_videoAspectRatio.value >= 1.0) {
+        _videoAspectRatio.value = 9 / 16;
+      }
+    }
+
     final manager = ref.read(uploadStateManagerProvider);
     await manager.startUpload(
       title: _titleController.text,
@@ -193,6 +264,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           ? _targetProfessionIds.value
           : const [],
       quizzes: _quizzes.value,
+      videoType: isLandscape ? 'vayu' : 'yog',
     );
 
     _handleUploadOutcome(manager);
@@ -610,7 +682,18 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                 ? 'Available when the current upload finishes'
                 : null,
           ),
-          AppSpacing.vSpace24,
+          AppSpacing.vSpace16,
+          _buildChoiceCard(
+            icon: Icons.monetization_on_rounded,
+            title: 'Paid Video',
+            color: AppColors.primary,
+            onTap: _pickPaidVideo,
+            enabled: !ref.watch(uploadStateManagerProvider).isUploadInFlight,
+            subtitle: ref.watch(uploadStateManagerProvider).isUploadInFlight
+                ? 'Available when upload finishes'
+                : 'Earn directly from viewers',
+          ),
+          AppSpacing.vSpace16,
           _buildChoiceCard(
             icon: Icons.campaign,
             title: AppText.get('upload_create_ad'),
@@ -651,12 +734,12 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       opacity: enabled ? 1.0 : 0.5,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: Container(
           padding: EdgeInsets.all(AppSpacing.spacing5),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: color.withValues(alpha: 0.1)),
           ),
           child: Row(
@@ -732,10 +815,68 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   Widget _buildUploadForm(UploadStateManager state) {
     return Column(
       children: [
+        if (state.isPaidVideo) ...[
+          Container(
+            padding: AppSpacing.edgeInsetsAll12,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.monetization_on_rounded,
+                  color: AppColors.primary,
+                  size: 24,
+                ),
+                AppSpacing.hSpace12,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Paid Video • ₹${state.paidConfig?.priceAmount.toInt() ?? 0}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        '${state.paidConfig?.previewPercentage.toInt() ?? 20}% Free Preview',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final updated = await PaidVideoConfigSheet.show(
+                      context,
+                      initialConfig: state.paidConfig ?? const PaidVideoConfig(isPaid: true),
+                    );
+                    if (updated != null) {
+                      state.setPaidConfig(updated);
+                    }
+                  },
+                  child: const Text('Edit', style: TextStyle(color: AppColors.primary)),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: AppSpacing.spacing5),
+        ],
         _buildCategorySelector(state),
         SizedBox(height: AppSpacing.spacing5),
         TextField(
           controller: _titleController,
+          minLines: 1,
+          maxLines: 4,
+          keyboardType: TextInputType.multiline,
           decoration: InputDecoration(
             labelText: 'Title',
             helperText: state.isSeries

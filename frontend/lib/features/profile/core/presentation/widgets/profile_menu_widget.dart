@@ -10,6 +10,7 @@ import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/features/profile/core/presentation/screens/settings_screen.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:vayug/features/profile/core/presentation/screens/edit_profile_screen.dart';
+import 'package:vayug/features/video/edit/presentation/screens/edit_video_details.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 
 class ProfileMenuWidget extends StatelessWidget {
@@ -99,7 +100,15 @@ class ProfileMenuWidget extends StatelessWidget {
                     },
                   ),
                 ],
-                if (stateManager.isOwner)
+                if (stateManager.isOwner) ...[
+                  _DrawerMenuItem(
+                    title: 'Manage Videos',
+                    icon: HugeIcons.strokeRoundedVideo01,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _handleManageVideos(context, stateManager);
+                    },
+                  ),
                   _DrawerMenuItem(
                     title: 'Manage Content',
                     icon: HugeIcons.strokeRoundedDelete02,
@@ -108,6 +117,7 @@ class ProfileMenuWidget extends StatelessWidget {
                       onEnterSelectionMode?.call();
                     },
                   ),
+                ],
                 if (stateManager.isOwner && stateManager.hasUpiId)
                   _DrawerMenuItem(
                     title: 'Setup Billing',
@@ -247,6 +257,154 @@ class ProfileMenuWidget extends StatelessWidget {
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+
+  void _handleManageVideos(
+    BuildContext context,
+    ProfileStateManager stateManager,
+  ) async {
+    var videos = stateManager.userVideos;
+    if (videos.isEmpty && !stateManager.hasLoadedVideosSuccessfully) {
+      await stateManager.loadUserVideos(userId);
+      videos = stateManager.userVideos;
+    }
+
+    if (!context.mounted) return;
+
+    if (videos.isEmpty) {
+      VayuSnackBar.showInfo(context, 'No videos to manage');
+      return;
+    }
+
+    if (videos.length == 1) {
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EditVideoDetails(video: videos.first),
+        ),
+      );
+      if (result != null && context.mounted) {
+        stateManager.updateVideoInList(videos.first.id, result);
+        stateManager.refreshData();
+      }
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        height: MediaQuery.of(sheetContext).size.height * 0.65,
+        decoration: const BoxDecoration(
+          color: AppColors.backgroundPrimary,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textTertiary.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Select Video to Edit',
+                    style: AppTypography.titleLarge.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                    onPressed: () => Navigator.pop(sheetContext),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.divider),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: videos.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.divider),
+                itemBuilder: (ctx, index) {
+                  final video = videos[index];
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    leading: Container(
+                      width: 60,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: AppColors.backgroundSecondary,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: video.thumbnailUrl.isNotEmpty
+                            ? Image.network(
+                                video.thumbnailUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.videocam_rounded,
+                                  color: AppColors.textTertiary,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.videocam_rounded,
+                                color: AppColors.textTertiary,
+                              ),
+                      ),
+                    ),
+                    title: Text(
+                      video.videoName,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      video.videoType.toUpperCase(),
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 14,
+                      color: AppColors.textTertiary,
+                    ),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      final result = await Navigator.push<Map<String, dynamic>>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EditVideoDetails(video: video),
+                        ),
+                      );
+                      if (result != null && context.mounted) {
+                        stateManager.updateVideoInList(video.id, result);
+                        stateManager.refreshData();
+                      }
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

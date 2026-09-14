@@ -42,9 +42,10 @@ export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceI
     links: Array.isArray(videoObj.links) && videoObj.links.length > 0
       ? videoObj.links.map(l => ({
           title: (l.title || '').trim(),
-          url: (l.url || '').trim()
+          url: (l.url || '').trim(),
+          showAtSeconds: Math.max(0, parseInt(l.showAtSeconds) || 0)
         })).filter(l => l.url.length > 0)
-      : (videoObj.link && String(videoObj.link).trim() ? [{ title: '', url: String(videoObj.link).trim() }] : []),
+      : (videoObj.link && String(videoObj.link).trim() ? [{ title: '', url: String(videoObj.link).trim(), showAtSeconds: 0 }] : []),
     uploadedAt: (videoObj.uploadedAt || videoObj.createdAt)?.toISOString ? (videoObj.uploadedAt || videoObj.createdAt).toISOString() : (videoObj.uploadedAt || videoObj.createdAt),
     isLiked: isLiked,
     earnings: parseFloat(videoObj.earnings) || 0.0,
@@ -55,7 +56,15 @@ export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceI
     episodes: videoObj.episodes || [],
     dubbedUrls: dubbedUrls,
     quizzes: videoObj.quizzes || [],
-    isSubscriberOnly: videoObj.isSubscriberOnly === true
+    isSubscriberOnly: videoObj.isSubscriberOnly === true,
+    paidAccess: videoObj.paidAccess?.isPaid ? {
+      isPaid: true,
+      previewPercentage: videoObj.paidAccess.previewPercentage || 20,
+      priceTier: videoObj.paidAccess.priceTier || null,
+      priceAmount: videoObj.paidAccess.priceAmount || 0,
+      creatorTargetPrice: videoObj.paidAccess.creatorTargetPrice || 0,
+      totalPurchases: videoObj.paidAccess.totalPurchases || 0
+    } : null
   };
 
   if (base.quizzes.length > 0) {

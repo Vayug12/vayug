@@ -265,10 +265,89 @@ class _UploaderAvatar extends StatelessWidget {
 }
 
 // Visit Now button widget
-class _VisitNowButton extends StatelessWidget {
+class _VisitNowButton extends StatefulWidget {
   final VideoModel video;
 
   const _VisitNowButton({required this.video});
+
+  @override
+  State<_VisitNowButton> createState() => _VisitNowButtonState();
+}
+
+class _VisitNowButtonState extends State<_VisitNowButton> {
+  bool _isLoading = false;
+
+  Future<void> _handlePress() async {
+    final validLinks = widget.video.validLinks;
+    if (validLinks.length > 1) {
+      LinksBottomSheet.show(
+        context,
+        title: widget.video.videoName,
+        links: validLinks.map((l) => l.toLinkItemData()).toList(),
+        source: 'vayug',
+        medium: 'video_link',
+        campaign: 'creator_visit',
+      );
+      return;
+    }
+
+    final targetUrl = validLinks.isNotEmpty
+        ? validLinks.first.url
+        : (widget.video.link?.trim() ?? '');
+    if (targetUrl.isEmpty) {
+      VayuSnackBar.showError(context, 'No link available for this video.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final enrichedUrl = UrlUtils.enrichUrl(
+        targetUrl,
+        medium: 'video_link',
+        campaign: 'creator_visit',
+      );
+
+      final uri = Uri.tryParse(enrichedUrl);
+      if (uri == null) {
+        if (mounted) VayuSnackBar.showError(context, 'This link format is invalid and cannot be opened.');
+        return;
+      }
+
+      if (!await canLaunchUrl(uri)) {
+        if (mounted) {
+          final scheme = uri.scheme.toLowerCase();
+          if (scheme != 'http' && scheme != 'https') {
+            VayuSnackBar.showError(context, 'This link type is not supported.');
+          } else {
+            VayuSnackBar.showError(
+              context,
+              'No browser found to open this link. Please check if a browser app is installed.',
+            );
+          }
+        }
+        return;
+      }
+
+      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!success && mounted) {
+        VayuSnackBar.showError(
+          context,
+          'Could not open link. The website may be down or temporarily unavailable.',
+        );
+      }
+    } catch (e) {
+      AppLogger.log('❌ _VisitNowButton: Error opening link: $e');
+      if (mounted) {
+        VayuSnackBar.showError(
+          context,
+          'An unexpected error occurred while opening the link.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -276,38 +355,9 @@ class _VisitNowButton extends StatelessWidget {
       width: MediaQuery.of(context).size.width * 0.75,
       margin: const EdgeInsets.only(right: 8),
       child: AppButton(
-        onPressed: () async {
-          final validLinks = video.validLinks;
-          if (validLinks.length > 1) {
-            LinksBottomSheet.show(
-              context,
-              title: video.videoName,
-              links: validLinks.map((l) => l.toLinkItemData()).toList(),
-              source: 'vayug',
-              medium: 'video_link',
-              campaign: 'creator_visit',
-            );
-            return;
-          }
-
-          final targetUrl = validLinks.isNotEmpty
-              ? validLinks.first.url
-              : (video.link?.trim() ?? '');
-          if (targetUrl.isEmpty) return;
-
-          final enrichedUrl = UrlUtils.enrichUrl(
-            targetUrl,
-            medium: 'video_link',
-            campaign: 'creator_visit',
-          );
-          final Uri uri = Uri.parse(enrichedUrl);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          } else if (context.mounted) {
-            VayuSnackBar.showError(context, 'Could not open link: $targetUrl');
-          }
-        },
-        icon: const Icon(Icons.open_in_new, size: 14),
+        onPressed: _isLoading ? null : _handlePress,
+        isLoading: _isLoading,
+        icon: _isLoading ? null : const Icon(Icons.open_in_new, size: 14),
         label: 'Visit Now',
         variant: AppButtonVariant.primary,
         isFullWidth: true,

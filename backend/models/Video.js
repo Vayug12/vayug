@@ -130,7 +130,8 @@ const videoSchema = new mongoose.Schema({
   },
   links: [{
     title: { type: String, trim: true, default: '' },
-    url: { type: String, trim: true, required: true }
+    url: { type: String, trim: true, required: true },
+    showAtSeconds: { type: Number, default: 0, min: 0 }
   }],
   
   // **NEW: Quality URLs for adaptive streaming**
@@ -360,6 +361,46 @@ const videoSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
     index: true
+  },
+
+  // **NEW: Paid Video Access & Preview Configuration**
+  paidAccess: {
+    isPaid: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    previewPercentage: {
+      type: Number,
+      min: 10,
+      max: 50,
+      default: 20
+    },
+    priceTier: {
+      type: String,
+      default: null,
+      trim: true
+    },
+    priceAmount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    creatorTargetPrice: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    totalPurchases: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    totalRevenue: {
+      type: Number,
+      default: 0,
+      min: 0
+    }
   }
 }, {
   timestamps: true

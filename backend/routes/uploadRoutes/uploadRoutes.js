@@ -23,6 +23,7 @@ import {
 import { enforceDailyUploadAvailability } from '../../middleware/dailyUploadQuota.js';
 
 import queueService from '../../services/yugFeedServices/queueService.js';
+import { validateCreatorLink } from '../../utils/common.js';
 import redisService from '../../services/caching/redisService.js';
 import { isValidProfessionId, normalizeProfessionIds } from '../../constants/professions.js';
 
@@ -307,7 +308,7 @@ router.post('/resource', verifyToken, uploadLimiter, resourceUpload.single('file
 router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, res) => {
   let createdVideo = null;
   try {
-    const { key, videoName, description, link, links, size, category, tags, videoType, crossPostPlatforms, seriesId, episodeNumber, thumbnailKey, quizzes, allowedSubscribers, targetProfessionIds } = req.body;
+    const { key, videoName, description, link, links, size, category, tags, videoType, crossPostPlatforms, seriesId, episodeNumber, thumbnailKey, quizzes, allowedSubscribers, targetProfessionIds, paidAccess } = req.body;
     const userId = req.user.id;
 
     if (!key || !videoName) {
@@ -318,8 +319,14 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
     let parsedLinks = [];
     if (Array.isArray(links)) {
       parsedLinks = links.map(l => {
-        if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
-        if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+        if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim(), showAtSeconds: 0 };
+        if (l && typeof l === 'object' && l.url) {
+          return {
+            title: (l.title || '').trim(),
+            url: String(l.url).trim(),
+            showAtSeconds: Math.max(0, parseInt(l.showAtSeconds) || 0)
+          };
+        }
         return null;
       }).filter(Boolean);
     } else if (typeof links === 'string') {
@@ -327,24 +334,34 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
         const decoded = JSON.parse(links);
         if (Array.isArray(decoded)) {
           parsedLinks = decoded.map(l => {
-            if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
-            if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+            if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim(), showAtSeconds: 0 };
+            if (l && typeof l === 'object' && l.url) {
+              return {
+                title: (l.title || '').trim(),
+                url: String(l.url).trim(),
+                showAtSeconds: Math.max(0, parseInt(l.showAtSeconds) || 0)
+              };
+            }
             return null;
           }).filter(Boolean);
         }
       } catch (_) {}
     }
     if (parsedLinks.length === 0 && link && String(link).trim()) {
-      parsedLinks = [{ title: '', url: String(link).trim() }];
+      parsedLinks = [{ title: '', url: String(link).trim(), showAtSeconds: 0 }];
     }
     const primaryLink = parsedLinks.length > 0 ? parsedLinks[0].url : (link ? String(link).trim() : '');
 
-    if (targetProfessionIds != null && (
-      !Array.isArray(targetProfessionIds) ||
-      targetProfessionIds.some((id) => !isValidProfessionId(String(id).trim().toLowerCase()))
-    )) {
-      return res.status(400).json({ success: false, error: 'Invalid target profession' });
+    for (let i = 0; i < parsedLinks.length; i++) {
+      const linkValidation = validateCreatorLink(parsedLinks[i].url);
+      if (!linkValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: `Link "${parsedLinks[i].url}" rejected: ${linkValidation.reason}`,
+        });
+      }
     }
+
     const normalizedTargetProfessionIds = normalizeProfessionIds(targetProfessionIds);
 
     console.log('🚀 Direct Upload Complete received for:', key);
@@ -353,6 +370,33 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
     const user = await User.findOne({ googleId: userId });
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Parse and validate Paid Video configuration + Mandatory UPI requirement
+    let parsedPaidAccess = { isPaid: false };
+    if (paidAccess) {
+      let rawPaid = paidAccess;
+      if (typeof paidAccess === 'string') {
+        try { rawPaid = JSON.parse(paidAccess); } catch (_) {}
+      }
+      if (rawPaid && (rawPaid.isPaid === true || rawPaid.isPaid === 'true')) {
+        const upiId = user.paymentDetails?.upiId || (user.preferredPaymentMethod === 'upi' ? user.paymentDetails?.upiId : null);
+        if (!upiId || String(upiId).trim().length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: 'UPI ID is required to upload paid videos. Please add your UPI ID first.'
+          });
+        }
+        parsedPaidAccess = {
+          isPaid: true,
+          previewPercentage: Math.min(50, Math.max(10, parseInt(rawPaid.previewPercentage) || 20)),
+          priceTier: rawPaid.priceTier ? String(rawPaid.priceTier).trim() : null,
+          priceAmount: Math.max(0, parseFloat(rawPaid.priceAmount) || 0),
+          creatorTargetPrice: Math.max(0, parseFloat(rawPaid.creatorTargetPrice) || 0),
+          totalPurchases: 0,
+          totalRevenue: 0
+        };
+      }
     }
 
     // **FIX: Resolve allowedSubscribers from googleIds/strings → MongoDB ObjectIds**
@@ -399,7 +443,8 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
       quizzes: Array.isArray(quizzes) ? quizzes : [],
       // **FIX: Store resolved ObjectIds so subscriber-videos query works correctly**
       allowedSubscribers: resolvedSubscriberIds,
-      isSubscriberOnly: isSubOnly
+      isSubscriberOnly: isSubOnly,
+      paidAccess: parsedPaidAccess
     });
 
     if (crossPostPlatforms && Array.isArray(crossPostPlatforms)) {

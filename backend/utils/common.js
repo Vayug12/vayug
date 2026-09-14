@@ -130,3 +130,53 @@ export const sanitizeObject = (obj) => {
 export const generateRandomString = (length = 8) => {
   return Math.random().toString(36).substring(2, length + 2);
 };
+
+/**
+ * Validate a creator link URL format.
+ * Returns { valid: true } or { valid: false, error: string }.
+ */
+export const validateCreatorLink = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return { valid: false, error: 'URL is required' };
+  }
+
+  let url = rawUrl.trim();
+  if (!url) return { valid: false, error: 'URL is empty' };
+
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+
+  if (!url.startsWith('https://')) {
+    return { valid: false, error: 'Only https:// links are allowed' };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+
+  const host = parsed.hostname.toLowerCase();
+
+  if (host === 'localhost' || host.startsWith('127.') || host.startsWith('0.')) {
+    return { valid: false, error: 'Localhost URLs are not allowed' };
+  }
+
+  if (!host.includes('.')) {
+    return { valid: false, error: 'Domain must have a valid extension (e.g. .com, .in)' };
+  }
+
+  const parts = host.split('.');
+  const tld = parts[parts.length - 1];
+  if (tld.length < 2 || !/^[a-z]+$/.test(tld)) {
+    return { valid: false, error: 'Invalid domain extension' };
+  }
+
+  if (parts.length < 2 || parts.some(p => p.length === 0)) {
+    return { valid: false, error: 'Invalid domain format' };
+  }
+
+  return { valid: true, normalizedUrl: url };
+};

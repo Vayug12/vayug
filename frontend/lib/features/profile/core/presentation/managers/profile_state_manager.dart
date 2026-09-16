@@ -77,7 +77,12 @@ class ProfileStateManager extends ChangeNotifier {
 
   List<VideoModel> get userVideos => videoManager.userVideos;
   bool get isVideosLoading => videoManager.isVideosLoading;
-  int get totalVideoCount => videoManager.totalVideoCount;
+  int get totalVideoCount {
+    if (videoManager.totalVideoCount > 0) return videoManager.totalVideoCount;
+    final infoCount = infoManager.videoCount;
+    if (infoCount > 0) return infoCount;
+    return videoManager.totalVideoCount;
+  }
   bool get hasMoreVideos => videoManager.hasMoreVideos;
   bool get isFetchingMore => videoManager.isFetchingMore;
   Set<String> get selectedVideoIds => videoManager.selectedVideoIds;

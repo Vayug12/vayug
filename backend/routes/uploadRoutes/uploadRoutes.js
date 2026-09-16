@@ -308,7 +308,7 @@ router.post('/resource', verifyToken, uploadLimiter, resourceUpload.single('file
 router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, res) => {
   let createdVideo = null;
   try {
-    const { key, videoName, description, link, links, size, category, tags, videoType, crossPostPlatforms, seriesId, episodeNumber, thumbnailKey, quizzes, allowedSubscribers, targetProfessionIds, paidAccess } = req.body;
+    const { key, videoName, description, link, links, size, category, tags, videoType, crossPostPlatforms, seriesId, episodeNumber, thumbnailKey, quizzes, allowedSubscribers, targetProfessionIds, paidAccess, isClientOptimized } = req.body;
     const userId = req.user.id;
 
     if (!key || !videoName) {
@@ -416,6 +416,8 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
 
     const isSubOnly = resolvedSubscriberIds.length > 0;
 
+    const isClientOptimizedBool = isClientOptimized === true || isClientOptimized === 'true';
+
     // 1. Create Video Record (Processing State)
     const newVideo = new Video({
       uploader: user._id,
@@ -431,8 +433,8 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
       thumbnailUrl: isSubOnly 
         ? 'https://placehold.co/600x400/1e1e24/ffffff?text=Subscriber+Only+🔒' 
         : (thumbnailKey ? cloudflareR2Service.getPublicUrl(thumbnailKey) : ''),
-      processingStatus: isSubOnly ? 'completed' : 'processing',
-      processingProgress: isSubOnly ? 100 : 0,
+      processingStatus: (isSubOnly || isClientOptimizedBool) ? 'completed' : 'processing',
+      processingProgress: (isSubOnly || isClientOptimizedBool) ? 100 : 0,
       processingError: null,
       originalSize: size || 0,
       views: 0,
@@ -482,8 +484,8 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
     }
 
     // 2. Trigger Background Processing via BullMQ
-    // We add the job to the queue instead of processing it locally, unless subscriber-only
-    if (!newVideo.isSubscriberOnly) {
+    // We add the job to the queue instead of processing it locally, unless subscriber-only or client-optimized
+    if (!newVideo.isSubscriberOnly && !isClientOptimizedBool) {
       await queueService.addVideoJob({
         videoId: newVideo._id.toString(),
         rawVideoKey: key,
@@ -492,6 +494,8 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
         crossPostPlatforms: crossPostPlatforms || [],
         thumbnailKey: thumbnailKey
       });
+    } else if (isClientOptimizedBool) {
+      console.log(`⚡ Video ${newVideo._id} is client-optimized (480p H.265). Bypassed Fly worker queue and published immediately.`);
     } else {
       console.log(`🔒 Video ${newVideo._id} is subscriber-only/E2EE. Bypassing processing queue and publishing immediately.`);
     }
@@ -499,7 +503,7 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
     // 3. Return success immediately
     res.status(201).json({
       success: true,
-      message: 'Video upload received and processing started',
+      message: isClientOptimizedBool ? 'Video upload completed and published' : 'Video upload received and processing started',
       video: newVideo
     });
 

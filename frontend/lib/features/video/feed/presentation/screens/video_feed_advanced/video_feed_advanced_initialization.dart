@@ -136,6 +136,7 @@ extension _VideoFeedInitialization on _VideoFeedAdvancedState {
 
       // **NEW: Load persisted seen video keys so cache doesn't re-show watched videos**
       await _loadSeenVideoKeysFromStorage();
+      await _loadLikedVideoIdsFromStorage();
 
       // **BACKEND-FIRST: Backend handles all filtering via WatchHistory**
       // No need to load from local storage - backend is source of truth

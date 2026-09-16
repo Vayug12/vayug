@@ -35,6 +35,7 @@ abstract class IVideoService {
     List<String>? targetProfessionIds,
     File? thumbnailFile,
     Map<String, dynamic>? paidAccess,
+    bool? isClientOptimized,
   });
 
   Future<VideoModel> toggleLike(String videoId);

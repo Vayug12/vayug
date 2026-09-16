@@ -489,6 +489,29 @@ router.get('/top-earners-from-following', verifyToken, async (req, res) => {
       _id: { $in: followingIds }
     }).select('googleId name email profilePic videos followerCount').lean();
 
+    // Query actual active video counts from Video collection for all followed users (including E2EE, excluding failed/deleted)
+    let videoCountMap = new Map();
+    try {
+      const videoCounts = await Video.aggregate([
+        {
+          $match: {
+            uploader: { $in: followingIds },
+            videoUrl: { $exists: true, $ne: null, $ne: '' },
+            processingStatus: { $nin: ['failed', 'error'] }
+          }
+        },
+        {
+          $group: {
+            _id: '$uploader',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+      videoCountMap = new Map(videoCounts.map(vc => [vc._id.toString(), vc.count]));
+    } catch (aggErr) {
+      console.warn('⚠️ Error aggregating video counts for top earners:', aggErr.message);
+    }
+
     // 2. Combine metadata with subscriber count
     const topEarners = followingUsers.map(user => {
       return {
@@ -496,7 +519,7 @@ router.get('/top-earners-from-following', verifyToken, async (req, res) => {
         name: user.name,
         profilePic: user.profilePic || null,
         totalEarnings: user.followerCount || 0,
-        videoCount: user.videos?.length || 0
+        videoCount: videoCountMap.get(user._id.toString()) ?? (user.videos?.length || 0)
       };
     })
     .sort((a, b) => b.totalEarnings - a.totalEarnings)
@@ -1439,6 +1462,19 @@ router.get('/:id', passiveVerifyToken, async (req, res) => {
       console.error('⚠️ GET /:id: Failed to get creator rank (non-fatal):', rankErr.message);
     }
 
+    // Calculate total active videos (including regular and E2EE, excluding failed/deleted)
+    let videoCount = user.videos?.length || 0;
+    try {
+      const Video = (await import('../models/Video.js')).default;
+      videoCount = await Video.countDocuments({
+        uploader: user._id,
+        videoUrl: { $exists: true, $ne: null, $ne: '' },
+        processingStatus: { $nin: ['failed', 'error'] }
+      });
+    } catch (cntErr) {
+      console.warn('⚠️ GET /:id: Failed to count active videos (non-fatal):', cntErr.message);
+    }
+
     const payload = {
       _id: user._id, // MongoDB ObjectID
       id: user.googleId,
@@ -1449,6 +1485,7 @@ router.get('/:id', passiveVerifyToken, async (req, res) => {
       profession: getProfessionById(user.professionId),
       websiteUrl: user.websiteUrl, // Adding websiteUrl to payload
       videos: user.videos,
+      videoCount,
       rank,
       // **SENSITIVE FIELDS**: Only include if owner
       email: isOwner ? user.email : null,

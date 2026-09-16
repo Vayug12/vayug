@@ -664,7 +664,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         index: 0,
                         currentIndex: mainController.currentIndex,
                         icon: HugeIcons.strokeRoundedPlayCircle02,
-                        activeIcon: Icons.play_circle_filled_rounded,
+                        activeIcon: HugeIcons.strokeRoundedPlayCircle02,
                         navId: 'nav_yug',
                         label: 'Yug',
                         onTap: () => _handleNavTap(0, mainController),
@@ -674,7 +674,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         index: 1,
                         currentIndex: mainController.currentIndex,
                         icon: HugeIcons.strokeRoundedVideo01,
-                        activeIcon: Icons.videocam_rounded,
+                        activeIcon: HugeIcons.strokeRoundedVideo01,
                         navId: 'nav_vayu',
                         label: 'Vayu',
                         onTap: () => _handleNavTap(1, mainController),
@@ -684,7 +684,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         index: 2,
                         currentIndex: mainController.currentIndex,
                         icon: HugeIcons.strokeRoundedAddCircleHalfDot,
-                        activeIcon: Icons.add_circle_rounded,
+                        activeIcon: HugeIcons.strokeRoundedAddCircleHalfDot,
                         navId: 'nav_upload',
                         label: 'Upload',
                         onTap: () => _handleNavTap(2, mainController),
@@ -694,7 +694,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         index: 3,
                         currentIndex: mainController.currentIndex,
                         icon: HugeIcons.strokeRoundedUserMultiple02,
-                        activeIcon: Icons.people_alt_rounded,
+                        activeIcon: HugeIcons.strokeRoundedUserMultiple02,
                         navId: 'nav_subscriptions',
                         label: 'E2EE',
                         onTap: () => _handleNavTap(3, mainController),
@@ -704,7 +704,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         index: 4,
                         currentIndex: mainController.currentIndex,
                         icon: HugeIcons.strokeRoundedUser,
-                        activeIcon: Icons.person_rounded,
+                        activeIcon: HugeIcons.strokeRoundedUser,
                         navId: 'nav_account',
                         label: 'Account',
                         onTap: () => _handleNavTap(4, mainController),
@@ -784,21 +784,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
                 else
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    child: (isSelected ? activeIcon : icon) is IconData
-                        ? Icon(
-                            isSelected ? activeIcon : icon,
-                            size: 26.0,
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.textSecondary,
-                          )
-                        : HugeIcon(
-                            icon: isSelected ? activeIcon : icon,
-                            size: 26.0,
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.textSecondary,
-                          ),
+                    child: HugeIcon(
+                      icon: isSelected ? activeIcon : icon,
+                      size: 26.0,
+                      color:
+                          isSelected ? Colors.white : AppColors.textSecondary,
+                    ),
                   ),
 
                 const SizedBox(height: 4), // Added small gap for clarity

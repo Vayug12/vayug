@@ -455,13 +455,7 @@ class _CreateAdScreenRefactoredState
 
   Widget _buildSubmitBar() {
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.backgroundPrimary,
-        border: Border(
-          top:
-              BorderSide(color: AppColors.borderPrimary.withValues(alpha: 0.4)),
-        ),
-      ),
+      color: AppColors.backgroundPrimary,
       child: SafeArea(
         top: false,
         child: Padding(

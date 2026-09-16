@@ -104,7 +104,7 @@ dependencies:
   hugeicons: ^1.1.2
   vibration: ^3.1.7
   firebase_crashlytics: ^4.3.10
-  ffmpeg_kit_flutter_new: ^4.1.0
+  ffmpeg_kit_flutter_new: ^4.6.2
   google_generative_ai: ^0.4.7
   gal: ^2.3.2
   # **NEW: E2EE (End-to-End Encryption) dependencies**

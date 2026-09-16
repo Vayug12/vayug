@@ -496,11 +496,12 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
 
   void _syncLikeStateWithModels(List<VideoModel> videos) {
     for (final video in videos) {
-      _getOrCreateNotifier<bool>(_isLikedVN, video.id, video.isLiked);
+      final effectiveIsLiked =
+          video.isLiked || _localLikedVideoIds.contains(video.id);
+      video.isLiked = effectiveIsLiked;
+      _getOrCreateNotifier<bool>(_isLikedVN, video.id, effectiveIsLiked);
       _getOrCreateNotifier<int>(_likeCountVN, video.id, video.likes);
     }
-
-    // **NEW: Synchronize dubbed state from backend removed**
   }
 
 

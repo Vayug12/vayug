@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:vayug/shared/services/file_picker_service.dart';
@@ -63,19 +64,32 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   /// View mirror of the manager's episode list, so Advanced Settings can show a
   /// live count without becoming a Consumer. The manager stays authoritative.
   final ValueNotifier<List<EpisodeDraft>> _seriesEpisodes = ValueNotifier<List<EpisodeDraft>>([]);
+  final ValueNotifier<Set<String>> _loadingActions = ValueNotifier<Set<String>>({});
 
   late final IAuthService _authService;
   late final FilePickerService _filePickerService;
+  StreamSubscription<UploadUiMessage>? _uiMessageSubscription;
 
   @override
   void initState() {
     super.initState();
     _authService = ref.read(authServiceProvider);
     _filePickerService = ref.read(filePickerServiceProvider);
+    _uiMessageSubscription = ref.read(uploadStateManagerProvider).uiMessageStream.listen((event) {
+      if (mounted) {
+        VayuSnackBar.show(
+          context,
+          event.message,
+          type: event.type,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
+    _uiMessageSubscription?.cancel();
     _titleController.dispose();
     _linkController.dispose();
     _links.dispose();
@@ -89,6 +103,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     _selectedPlatforms.dispose();
     _targetProfessionIds.dispose();
     _seriesEpisodes.dispose();
+    _loadingActions.dispose();
     super.dispose();
   }
 
@@ -97,6 +112,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       ref.read(uploadStateManagerProvider).reset();
     }
     _showUploadForm.value = false;
+    _loadingActions.value = {};
     _titleController.clear();
     _linkController.clear();
     _tagInputController.clear();
@@ -128,14 +144,16 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           'An upload is still running. You can start the next one as soon as it finishes.');
       return;
     }
+    if (_loadingActions.value.contains('video')) return;
 
-    final userData = await _authService.getUserData();
-    if (userData == null) {
-      _showLoginPrompt();
-      return;
-    }
-
+    _loadingActions.value = {..._loadingActions.value, 'video'};
     try {
+      final userData = await _authService.getUserData();
+      if (userData == null) {
+        if (mounted) _showLoginPrompt();
+        return;
+      }
+
       final result = await _filePickerService.pickFiles(
         type: FileType.custom,
         allowMultiple: false,
@@ -151,6 +169,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       }
     } catch (e) {
       AppLogger.log('Error picking video: $e');
+    } finally {
+      if (mounted) {
+        _loadingActions.value = Set.from(_loadingActions.value)..remove('video');
+      }
     }
   }
 
@@ -160,18 +182,20 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           'An upload is still running. You can start the next one as soon as it finishes.');
       return;
     }
+    if (_loadingActions.value.contains('paid')) return;
 
-    final userData = await _authService.getUserData();
-    if (userData == null) {
-      _showLoginPrompt();
-      return;
-    }
-
-    // Mandatory UPI verification before uploading paid videos
-    final hasUpi = await UpiSetupDialog.ensureUpiAvailable(context);
-    if (!mounted || !hasUpi) return;
-
+    _loadingActions.value = {..._loadingActions.value, 'paid'};
     try {
+      final userData = await _authService.getUserData();
+      if (userData == null) {
+        if (mounted) _showLoginPrompt();
+        return;
+      }
+
+      // Mandatory UPI verification before uploading paid videos
+      final hasUpi = await UpiSetupDialog.ensureUpiAvailable(context);
+      if (!mounted || !hasUpi) return;
+
       final result = await _filePickerService.pickFiles(
         type: FileType.custom,
         allowMultiple: false,
@@ -200,6 +224,28 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       }
     } catch (e) {
       AppLogger.log('Error picking paid video: $e');
+    } finally {
+      if (mounted) {
+        _loadingActions.value = Set.from(_loadingActions.value)..remove('paid');
+      }
+    }
+  }
+
+  Future<void> _openCreateAd() async {
+    if (_loadingActions.value.contains('ad')) return;
+
+    _loadingActions.value = {..._loadingActions.value, 'ad'};
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const CreateAdScreenRefactored()),
+      );
+    } catch (e) {
+      AppLogger.log('Error opening create ad: $e');
+    } finally {
+      if (mounted) {
+        _loadingActions.value = Set.from(_loadingActions.value)..remove('ad');
+      }
     }
   }
 
@@ -323,6 +369,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   Future<void> _confirmCancelUpload() async {
     final manager = ref.read(uploadStateManagerProvider);
+    if (manager.status == UploadStatus.processing ||
+        manager.currentPhase == 'processing') {
+      return;
+    }
     final uploaded = manager.episodesUploaded;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -665,60 +715,54 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   }
 
   Widget _buildInitialChoiceView(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.space24, vertical: AppSpacing.spacing10),
-      child: Column(
-        children: [
-
-          _buildChoiceCard(
-            icon: Icons.video_library,
-            title: AppText.get('upload_video'),
-            color: AppColors.primary,
-            onTap: _pickVideo,
-            // Dimmed rather than hidden while an upload runs: the user needs to
-            // see why they cannot start another one.
-            enabled: !ref.watch(uploadStateManagerProvider).isUploadInFlight,
-            subtitle: ref.watch(uploadStateManagerProvider).isUploadInFlight
-                ? 'Available when the current upload finishes'
-                : null,
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: _loadingActions,
+      builder: (context, loadingActions, _) {
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.space24, vertical: AppSpacing.spacing10),
+          child: Column(
+            children: [
+              _buildChoiceCard(
+                icon: Icons.video_library,
+                title: AppText.get('upload_video'),
+                color: AppColors.primary,
+                onTap: _pickVideo,
+                enabled: !ref.watch(uploadStateManagerProvider).isUploadInFlight,
+                isLoading: loadingActions.contains('video'),
+                subtitle: ref.watch(uploadStateManagerProvider).isUploadInFlight
+                    ? 'Available when the current upload finishes'
+                    : null,
+              ),
+              AppSpacing.vSpace16,
+              _buildChoiceCard(
+                icon: Icons.monetization_on_rounded,
+                title: 'Paid Video',
+                color: AppColors.primary,
+                onTap: _pickPaidVideo,
+                enabled: !ref.watch(uploadStateManagerProvider).isUploadInFlight,
+                isLoading: loadingActions.contains('paid'),
+                subtitle: ref.watch(uploadStateManagerProvider).isUploadInFlight
+                    ? 'Available when upload finishes'
+                    : 'Earn directly from viewers',
+              ),
+              AppSpacing.vSpace16,
+              _buildChoiceCard(
+                icon: Icons.campaign,
+                title: AppText.get('upload_create_ad'),
+                color: AppColors.success,
+                onTap: _openCreateAd,
+                isLoading: loadingActions.contains('ad'),
+              ),
+              SizedBox(height: AppSpacing.spacing10),
+              TextButton.icon(
+                onPressed: _showWhatToUploadDialog,
+                icon: const Icon(Icons.help_outline, size: 16),
+                label: Text(AppText.get('upload_what_to_upload')),
+              ),
+            ],
           ),
-          AppSpacing.vSpace16,
-          _buildChoiceCard(
-            icon: Icons.monetization_on_rounded,
-            title: 'Paid Video',
-            color: AppColors.primary,
-            onTap: _pickPaidVideo,
-            enabled: !ref.watch(uploadStateManagerProvider).isUploadInFlight,
-            subtitle: ref.watch(uploadStateManagerProvider).isUploadInFlight
-                ? 'Available when upload finishes'
-                : 'Earn directly from viewers',
-          ),
-          AppSpacing.vSpace16,
-          _buildChoiceCard(
-            icon: Icons.campaign,
-            title: AppText.get('upload_create_ad'),
-            color: AppColors.success,
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateAdScreenRefactored()));
-            },
-          ),
-          // AI Video generation is not completed yet — hidden from UI.
-          // _buildChoiceCard(
-          //   icon: Icons.auto_awesome,
-          //   title: 'AI Video',
-          //   color: AppColors.primary,
-          //   onTap: () {
-          //     Navigator.push(context, MaterialPageRoute(builder: (context) => const AiVideoGenerateScreen()));
-          //   },
-          // ),
-          SizedBox(height: AppSpacing.spacing10),
-          TextButton.icon(
-            onPressed: _showWhatToUploadDialog,
-            icon: const Icon(Icons.help_outline, size: 16),
-            label: Text(AppText.get('upload_what_to_upload')),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -728,12 +772,13 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     required Color color,
     required VoidCallback onTap,
     bool enabled = true,
+    bool isLoading = false,
     String? subtitle,
   }) {
     return Opacity(
       opacity: enabled ? 1.0 : 0.5,
       child: InkWell(
-        onTap: onTap,
+        onTap: (enabled && !isLoading) ? onTap : null,
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Container(
           padding: EdgeInsets.all(AppSpacing.spacing5),
@@ -761,7 +806,17 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: color),
+              if (isLoading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppColors.primary,
+                  ),
+                )
+              else
+                Icon(Icons.chevron_right, color: color),
             ],
           ),
         ),
@@ -935,6 +990,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     }
 
     if (state.isUploadInFlight) {
+      final isProcessing = state.status == UploadStatus.processing ||
+          state.currentPhase == 'processing';
+
       return Column(
         children: [
           // Leaving is the recommended path — waiting on this screen buys the
@@ -945,13 +1003,15 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             variant: AppButtonVariant.primary,
             isFullWidth: true,
           ),
-          AppSpacing.vSpace12,
-          AppButton(
-            onPressed: _confirmCancelUpload,
-            label: 'Cancel Upload',
-            variant: AppButtonVariant.outline,
-            isFullWidth: true,
-          ),
+          if (!isProcessing) ...[
+            AppSpacing.vSpace12,
+            AppButton(
+              onPressed: _confirmCancelUpload,
+              label: 'Cancel Upload',
+              variant: AppButtonVariant.outline,
+              isFullWidth: true,
+            ),
+          ],
         ],
       );
     }

@@ -1148,7 +1148,9 @@ class _VayuLongFormPlayerScreenState
       _playbackStartVerificationTimer = null;
       _firstFrameRecoveryAttempts.remove(_videos[index].id);
     }
-    if (isSeekingBufferingVN.value && controller.value.isPlaying) {
+    if (isSeekingBufferingVN.value &&
+        controller.value.isPlaying &&
+        !controller.value.isBuffering) {
       isSeekingBufferingVN.value = false;
     }
     if (_pendingNeighbourPreloadIndex == index &&

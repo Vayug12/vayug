@@ -121,29 +121,33 @@ class VayuPlayerOverlay extends StatelessWidget {
                           ValueListenableBuilder<bool>(
                             valueListenable: isSeekingBufferingVN,
                             builder: (context, isSeekingBuffering, _) {
-                              // The seek loader is rendered in the same center
-                              // position by VayuFeedItem. Reserve this space so
-                              // the play/pause control cannot overlap it and
-                              // landscape transport controls do not shift.
-                              if (isSeekingBuffering) {
-                                return SizedBox.square(
-                                  dimension: primaryControlSize,
-                                );
-                              }
-                              return InteractiveScaleButton(
-                                onTap: onTogglePlay,
-                                child: Container(
-                                  width: primaryControlSize,
-                                  height: primaryControlSize,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.36),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child:
-                                      ValueListenableBuilder<VideoPlayerValue>(
-                                    valueListenable: controller!,
-                                    builder: (context, value, _) {
-                                      return Transform.translate(
+                              return ValueListenableBuilder<VideoPlayerValue>(
+                                valueListenable: controller!,
+                                builder: (context, value, _) {
+                                  final bool isBuffering = isSeekingBuffering ||
+                                      value.isBuffering ||
+                                      !value.isInitialized;
+
+                                  // When buffering or seeking, VayuFeedItem renders the
+                                  // center spinner directly without any background container
+                                  // (YouTube style). Reserve this space so landscape
+                                  // transport controls do not shift and play/pause is disabled.
+                                  if (isBuffering) {
+                                    return SizedBox.square(
+                                      dimension: primaryControlSize,
+                                    );
+                                  }
+
+                                  return InteractiveScaleButton(
+                                    onTap: onTogglePlay,
+                                    child: Container(
+                                      width: primaryControlSize,
+                                      height: primaryControlSize,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.36),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Transform.translate(
                                         offset: Offset(
                                           value.isPlaying ? 0 : 1,
                                           0,
@@ -155,10 +159,10 @@ class VayuPlayerOverlay extends StatelessWidget {
                                           color: Colors.white,
                                           size: primaryIconSize,
                                         ),
-                                      );
-                                    },
-                                  ),
-                                ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),

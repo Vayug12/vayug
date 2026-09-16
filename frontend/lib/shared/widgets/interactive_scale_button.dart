@@ -12,6 +12,8 @@ class InteractiveScaleButton extends StatefulWidget {
   final Duration animationDuration;
   final HitTestBehavior behavior;
 
+  final bool callOnTapOnTapUp;
+
   const InteractiveScaleButton({
     Key? key,
     required this.child,
@@ -19,6 +21,7 @@ class InteractiveScaleButton extends StatefulWidget {
     this.scaleDownFactor = 0.95,
     this.animationDuration = const Duration(milliseconds: 150),
     this.behavior = HitTestBehavior.opaque,
+    this.callOnTapOnTapUp = true,
   }) : super(key: key);
 
   @override
@@ -62,7 +65,9 @@ class _InteractiveScaleButtonState extends State<InteractiveScaleButton>
   void _onTapUp(TapUpDetails details) {
     if (widget.onTap != null) {
       _controller.reverse();
-      widget.onTap!();
+      if (widget.callOnTapOnTapUp) {
+        widget.onTap!();
+      }
     }
   }
 

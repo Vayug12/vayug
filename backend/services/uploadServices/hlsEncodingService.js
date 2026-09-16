@@ -108,7 +108,7 @@ class HLSEncodingService {
 
       const originalVideoInfo = options.originalVideoInfo;
       let selectedResolution;
-      let targetBitrate = '340k';
+      let targetBitrate = '850k';
       
       if (originalVideoInfo && originalVideoInfo.width && originalVideoInfo.height) {
         const originalHeight = originalVideoInfo.height;
@@ -117,9 +117,9 @@ class HLSEncodingService {
         } else if (originalHeight > 720) {
           targetBitrate = '1200k';
         } else if (originalHeight > 480) {
-          targetBitrate = '340k';
+          targetBitrate = '850k';
         } else {
-          targetBitrate = '340k';
+          targetBitrate = '850k';
         }
         
         selectedResolution = {
@@ -128,7 +128,7 @@ class HLSEncodingService {
           bitrate: targetBitrate
         };
       } else {
-        targetBitrate = '340k';
+        targetBitrate = '850k';
         selectedResolution = { width: 854, height: 480, bitrate: targetBitrate };
       }
       

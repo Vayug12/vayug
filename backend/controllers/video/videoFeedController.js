@@ -51,6 +51,44 @@ const populateEpisodesForVideos = async (videos) => {
 };
 
 /**
+ * Helper to accurately populate isLiked for a list of videos for a given viewer
+ */
+const populateUserLikesForVideos = async (videos, userObjectIdStr) => {
+  if (!userObjectIdStr || !videos || videos.length === 0) return;
+  const videoObjectIds = videos
+    .map(v => v._id || v.id)
+    .filter(Boolean)
+    .map(id => {
+      try {
+        return new mongoose.Types.ObjectId(id);
+      } catch (_) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (videoObjectIds.length === 0) return;
+
+  try {
+    const userObjId = new mongoose.Types.ObjectId(userObjectIdStr);
+    const likedDocs = await Video.find({
+      _id: { $in: videoObjectIds },
+      likedBy: userObjId,
+    }).select('_id').lean();
+
+    const likedSet = new Set(likedDocs.map(d => d._id.toString()));
+    for (const video of videos) {
+      const vidId = (video._id || video.id)?.toString();
+      if (vidId) {
+        video.isLiked = likedSet.has(vidId);
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ Error checking user likes for videos:', err);
+  }
+};
+
+/**
  * Video Retrieval Controllers
  */
 export const getUserVideos = async (req, res) => {
@@ -61,9 +99,8 @@ export const getUserVideos = async (req, res) => {
     const videoType = (req.query.videoType || 'all').toLowerCase();
     const mediaType = (req.query.mediaType || 'all').toLowerCase();
     
-    // **FIX: Include pagination and filter parameters in the cache key**
-    // This prevents different pages/filters from returning the same cached data.
-    const cacheKey = `${VideoCacheKeys.user(googleId)}:p${page}:l${limit}:t${videoType}:m${mediaType}`;
+    const requestingGoogleId = req.user?.googleId || req.user?.id;
+    const cacheKey = `${VideoCacheKeys.user(googleId)}:p${page}:l${limit}:t${videoType}:m${mediaType}:u${requestingGoogleId || 'anon'}`;
     
     res.set('Cache-Control', 'public, max-age=300');
 
@@ -127,7 +164,6 @@ export const getUserVideos = async (req, res) => {
       query.mediaType = req.query.mediaType.toLowerCase();
     }
 
-    const requestingGoogleId = req.user?.googleId || req.user?.id;
     const isOwner = requestingGoogleId === googleId;
 
     // ENFORCE: Subscriber-Only Filtering (STRICT)
@@ -137,7 +173,7 @@ export const getUserVideos = async (req, res) => {
       query.isSubscriberOnly = { $ne: true };
     }
 
-    const [videos, rank, cachedEarnings] = await Promise.all([
+    const [videos, rank, cachedEarnings, totalVideoCount] = await Promise.all([
       Video.find(query)
         .populate('uploader', 'name profilePic googleId')
         .sort({ createdAt: -1 })
@@ -146,7 +182,12 @@ export const getUserVideos = async (req, res) => {
         .select('-description -shares')
         .lean(),
       (!isOwner) ? RecommendationService.getGlobalCreatorRank(user._id) : Promise.resolve(0),
-      (isOwner && redisService.getConnectionStatus()) ? redisService.get(`creator:earnings:${user._id}`) : Promise.resolve(null)
+      (isOwner && redisService.getConnectionStatus()) ? redisService.get(`creator:earnings:${user._id}`) : Promise.resolve(null),
+      Video.countDocuments({
+        uploader: user._id,
+        videoUrl: { $exists: true, $ne: null, $ne: '' },
+        processingStatus: { $nin: ['failed', 'error'] }
+      })
     ]);
 
     const validVideos = videos.filter(video => video.uploader && video.uploader.name);
@@ -197,6 +238,7 @@ export const getUserVideos = async (req, res) => {
 
     const videosWithMetadata = validVideos.map(v => {
       if (v.uploader) {
+        v.uploader.totalVideos = totalVideoCount;
         if (isOwner) {
           v.uploader.earnings = parseFloat(currentMonthEarnings.toFixed(2));
         } else {
@@ -219,6 +261,8 @@ export const getUserVideos = async (req, res) => {
       const rqUser = await User.findOne({ googleId: requestingUserGoogleId }).select('_id').lean();
       if (rqUser) requestingUserObjectIdStr = rqUser._id.toString();
     }
+
+    await populateUserLikesForVideos(videosWithMetadata, requestingUserObjectIdStr);
 
     const videosSerialized = serializeVideos(videosWithMetadata, req.apiVersion, requestingUserObjectIdStr, req.traceId);
     
@@ -389,6 +433,8 @@ export const getFeed = async (req, res) => {
       if (rqUser) rqUserObjectIdStr = rqUser._id.toString();
     }
 
+    await populateUserLikesForVideos(finalVideos, rqUserObjectIdStr);
+
     const serializedVideos = serializeVideos(finalVideos, req.apiVersion, rqUserObjectIdStr, req.traceId);
 
     let nextCursor = null;
@@ -521,6 +567,8 @@ export const getFollowingFeed = async (req, res) => {
       if (nextCursor instanceof Date) nextCursor = nextCursor.toISOString();
     }
 
+    await populateUserLikesForVideos(pageVideos, userId ? userId.toString() : null);
+
     const payload = {
       videos: serializeVideos(pageVideos, req.apiVersion, userId.toString(), req.traceId),
       hasMore,
@@ -553,9 +601,11 @@ export const getVideoById = async (req, res) => {
 
     const videoObj = video.toObject();
 
+    const requestingGoogleId = req.user?.googleId || req.user?.id;
+    const rqUserObjectIdStr = req.user?._id;
+
     // **NEW: Check access for subscriber-only videos**
     if (videoObj.isSubscriberOnly) {
-      const requestingGoogleId = req.user?.googleId || req.user?.id;
       if (!requestingGoogleId) {
         return res.status(403).json({ error: 'This video is only available to subscribers' });
       }
@@ -571,9 +621,6 @@ export const getVideoById = async (req, res) => {
       }
     }
 
-    const requestingGoogleId = req.user?.googleId || req.user?.id;
-    const rqUserObjectIdStr = req.user?._id;
-
     const [episodes, rank, isLiked] = await Promise.all([
       videoObj.seriesId ?
         Video.find({ seriesId: videoObj.seriesId, processingStatus: 'completed' })
@@ -588,6 +635,7 @@ export const getVideoById = async (req, res) => {
         : Promise.resolve(false)
     ]);
 
+    videoObj.isLiked = isLiked;
     const transformedVideo = serializeVideo(videoObj, req.apiVersion, rqUserObjectIdStr, req.traceId);
     res.json(transformedVideo);
   } catch (error) {

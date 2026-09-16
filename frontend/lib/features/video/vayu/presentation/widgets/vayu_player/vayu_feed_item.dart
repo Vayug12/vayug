@@ -586,39 +586,7 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                       return widget.buildScrubbingOverlay();
                     },
                   ),
-                  if (widget.isSeekingBufferingVN != null)
-                    ValueListenableBuilder<bool>(
-                      valueListenable: widget.isSeekingBufferingVN!,
-                      builder: (context, isSeeking, _) {
-                        return AnimatedOpacity(
-                          opacity: isSeeking ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 200),
-                          child: isSeeking
-                              ? const IgnorePointer(
-                                  child: Center(
-                                    child: SizedBox(
-                                      width: 44,
-                                      height: 44,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          color: Color(0x66000000),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Padding(
-                                          padding: EdgeInsets.all(11),
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2.5,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
-                        );
-                      },
-                    ),
+                  _buildBufferingIndicator(controller),
                 ],
 
                 // 4. SECONDARY CONTROLS & PROGRESS BAR
@@ -773,6 +741,58 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
         ],
       ),
     ),
+    );
+  }
+
+  Widget _buildBufferingIndicator(VideoPlayerController? controller) {
+    if (!widget.isCurrent || widget.hasControllerLoadError) {
+      return const SizedBox.shrink();
+    }
+
+    Widget buildSpinner(bool isBuffering) {
+      return AnimatedOpacity(
+        opacity: isBuffering ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: isBuffering
+            ? const IgnorePointer(
+                child: Center(
+                  child: SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3.0,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              )
+            : const SizedBox.shrink(),
+      );
+    }
+
+    Widget buildWithSeeking(bool controllerBuffering) {
+      if (widget.isSeekingBufferingVN == null) {
+        return buildSpinner(controllerBuffering);
+      }
+      return ValueListenableBuilder<bool>(
+        valueListenable: widget.isSeekingBufferingVN!,
+        builder: (context, isSeeking, _) {
+          return buildSpinner(controllerBuffering || isSeeking);
+        },
+      );
+    }
+
+    if (controller == null) {
+      return buildWithSeeking(true);
+    }
+
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        if (value.hasError) return const SizedBox.shrink();
+        final bool isBuffering = !value.isInitialized || value.isBuffering;
+        return buildWithSeeking(isBuffering);
+      },
     );
   }
 }

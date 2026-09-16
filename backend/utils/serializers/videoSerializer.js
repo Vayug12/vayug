@@ -18,10 +18,10 @@ export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceI
       : (videoObj.dubbedUrls || null);
   
   // Calculate isLiked if user ID provided
-  let isLiked = videoObj.isLiked || false;
-  if (requestingUserObjectId && videoObj.likedBy) {
+  let isLiked = videoObj.isLiked === true;
+  if (!isLiked && requestingUserObjectId && Array.isArray(videoObj.likedBy) && videoObj.likedBy.length > 0) {
     const userObjectIdStr = requestingUserObjectId.toString();
-    isLiked = videoObj.likedBy.some(id => id.toString() === userObjectIdStr);
+    isLiked = videoObj.likedBy.some(id => (id?._id?.toString() || id?.toString()) === userObjectIdStr);
   }
 
   // Base transformation (common for all versions)
@@ -84,7 +84,8 @@ export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceI
       googleId: videoObj.uploader?.googleId?.toString() || '',
       name: videoObj.uploader?.name || 'Unknown User',
       profilePic: videoObj.uploader?.profilePic || '',
-      earnings: parseFloat(videoObj.uploader?.earnings) || 0.0
+      earnings: parseFloat(videoObj.uploader?.earnings) || 0.0,
+      totalVideos: typeof videoObj.uploader?.totalVideos === 'number' ? videoObj.uploader.totalVideos : undefined
     };
     
     base.hlsMasterPlaylistUrl = cloudflareR2Service.getPublicUrl(videoObj.hlsMasterPlaylistUrl || '');

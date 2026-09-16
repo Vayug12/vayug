@@ -20,9 +20,9 @@ class AppConfig {
   // Cache for the discovered base URL
   static String? _cachedBaseUrl;
 
-  // Find your IP: Windows: ipconfig | Linux/Mac: ifconfig or ip address
+  // Find your IP: Windows: ipconfig | Linux/Mac: ifconfig or ip address1
   // Make sure your phone/emulator is on the same Wi‑Fi network
-  static const String _currentMobileIp = 'http://192.168.0.197:5001';
+  static const String _currentMobileIp = 'http://192.168.10.120:5001';
   static const String _currentMobileIp2 = 'http://172.20.10.2:5001';
   static const String _localIpBaseUrl = _currentMobileIp;
 

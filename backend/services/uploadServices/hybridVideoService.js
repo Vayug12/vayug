@@ -327,6 +327,14 @@ class HybridVideoService {
           }
       }
 
+      // Check if video is already pre-optimized for 480p H.264/H.265/HEVC
+      const isPreOptimized = (originalVideoInfo.height <= 480 || originalVideoInfo.width <= 480) &&
+                            (originalVideoInfo.codec === 'h264' || originalVideoInfo.codec === 'h265' || originalVideoInfo.codec === 'hevc');
+
+      if (isPreOptimized) {
+        console.log('⚡ Video is already pre-optimized (<=480p)! Using fast STREAM COPY for HLS segmentation.');
+      }
+
       // Step 4: Use LOCAL FFmpeg to create HLS segments
       console.log('🎬 [Step 4/6] Converting to HLS with FFmpeg (original aspect ratio)...');
       const videoId = `${videoName}_${Date.now()}`;
@@ -336,7 +344,9 @@ class HybridVideoService {
         videoId,
         {
           quality: 'medium',
-          codec: 'h265',
+          codec: isPreOptimized ? (originalVideoInfo.codec === 'h264' ? 'h264' : 'h265') : 'h265',
+          copyVideo: isPreOptimized,
+          copyAudio: false,
           originalVideoInfo: originalVideoInfo,
           onProgress: (percent) => {
             // Map 0-100% of encoding to 20-80% of total progress

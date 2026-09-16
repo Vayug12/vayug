@@ -112,4 +112,48 @@ extension _VideoFeedPersistence on _VideoFeedAdvancedState {
       AppLogger.log('⚠️ VideoFeedAdvanced: Error saving seen video keys: $e');
     }
   }
+
+  /// **NEW: Load locally persisted liked video IDs for zero-delay cold-start heart sync**
+  Future<void> _loadLikedVideoIdsFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final storedIds = prefs.getStringList(_kLikedVideoIdsKey) ?? const [];
+      if (storedIds.isNotEmpty) {
+        _localLikedVideoIds.addAll(storedIds);
+        AppLogger.log(
+          '✅ VideoFeedAdvanced: Loaded ${_localLikedVideoIds.length} liked video IDs from storage',
+        );
+      }
+    } catch (e) {
+      AppLogger.log('⚠️ VideoFeedAdvanced: Error loading liked video IDs: $e');
+    }
+  }
+
+  /// **NEW: Record liked/unliked video ID locally in SharedPreferences**
+  Future<void> _recordVideoLikePersistence(String videoId, bool isLiked) async {
+    try {
+      if (videoId.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
+      final currentList = prefs.getStringList(_kLikedVideoIdsKey) ?? <String>[];
+      final idSet = currentList.toSet();
+
+      if (isLiked) {
+        idSet.add(videoId);
+        _localLikedVideoIds.add(videoId);
+      } else {
+        idSet.remove(videoId);
+        _localLikedVideoIds.remove(videoId);
+      }
+
+      // Cap at 2000 most recent liked IDs to avoid unbounded growth
+      List<String> toSave = idSet.toList();
+      if (toSave.length > 2000) {
+        toSave = toSave.sublist(toSave.length - 2000);
+      }
+
+      await prefs.setStringList(_kLikedVideoIdsKey, toSave);
+    } catch (e) {
+      AppLogger.log('⚠️ VideoFeedAdvanced: Error persisting like state: $e');
+    }
+  }
 }

@@ -48,6 +48,7 @@ class ProfileInfoManager extends ChangeNotifier {
   bool get isEditing => _isEditing;
   DateTime? get lastFullLoadTime => _lastFullLoadTime;
   String? get error => _error;
+  int get videoCount => (_userData?['videoCount'] as num?)?.toInt() ?? 0;
 
   set isEditing(bool value) {
     _isEditing = value;
@@ -385,6 +386,7 @@ class ProfileInfoManager extends ChangeNotifier {
 
     normalized['followersCount'] = parseCount(normalized['followersCount'] ?? normalized['followers']);
     normalized['followingCount'] = parseCount(normalized['followingCount'] ?? normalized['following']);
+    normalized['videoCount'] = parseCount(normalized['videoCount'] ?? normalized['videos']);
     normalized['rank'] = normalized['rank'] ?? 0;
     
     if (!normalized.containsKey('notificationPreferences')) {

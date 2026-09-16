@@ -6,12 +6,25 @@ import 'package:vayug/core/interfaces/i_video_upload_service.dart';
 import 'package:vayug/core/interfaces/i_video_service.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/paid/domain/models/paid_video_config.dart';
+import 'package:vayug/features/video/upload/data/services/client_video_processor.dart';
 import 'package:vayug/features/video/upload/domain/models/episode_draft.dart';
 import 'package:vayug/shared/services/notification_service.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
+import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 enum UploadStatus { idle, preparing, uploading, validation, processing, finalizing, success, error }
+
+/// UI message dispatched to views during upload lifecycle.
+class UploadUiMessage {
+  final String message;
+  final VayuSnackBarType type;
+
+  const UploadUiMessage({
+    required this.message,
+    this.type = VayuSnackBarType.info,
+  });
+}
 
 /// Everything one upload needs, captured once at submit time.
 ///
@@ -112,6 +125,21 @@ class UploadStateManager extends ChangeNotifier {
     required IVideoUploadService uploadService,
     required IVideoService videoService,
   }) : _uploadService = uploadService, _videoService = videoService;
+
+  final _uiMessageController = StreamController<UploadUiMessage>.broadcast();
+  Stream<UploadUiMessage> get uiMessageStream => _uiMessageController.stream;
+
+  void _emitUiMessage(String message, [VayuSnackBarType type = VayuSnackBarType.info]) {
+    if (!_uiMessageController.isClosed) {
+      _uiMessageController.add(UploadUiMessage(message: message, type: type));
+    }
+  }
+
+  @override
+  void dispose() {
+    _uiMessageController.close();
+    super.dispose();
+  }
 
   static const Set<UploadStatus> _inFlightStatuses = {
     UploadStatus.preparing,
@@ -347,7 +375,7 @@ class UploadStateManager extends ChangeNotifier {
     _status = UploadStatus.preparing;
     _currentPhase = 'preparation';
     _errorMessage = null;
-    _setProgress(0.0);
+    _setProgress(0.0, allowReset: true);
     notifyListeners();
 
     // 1. Validate
@@ -358,40 +386,104 @@ class UploadStateManager extends ChangeNotifier {
       return;
     }
 
-    // 2. Setup Progress Listener
+    File fileToUpload = videoFile;
+    bool isOptimizedFile = false;
+
+    // 2. Client Optimization Phase (Preparing)
+    _status = UploadStatus.preparing;
+    _currentPhase = 'preparing';
+    _setProgress(0.05);
+    notifyListeners();
+
+    bool clientProcessingStarted = false;
+    try {
+      final processResult = await ClientVideoProcessor.processVideo(
+        originalVideo: videoFile,
+        onStarted: () {
+          clientProcessingStarted = true;
+          _emitUiMessage('Processing started...', VayuSnackBarType.info);
+        },
+        onProgress: (p) {
+          if (_isCurrentOperation(operationId) && _status == UploadStatus.preparing) {
+            _setProgress(0.05 + (p * 0.35)); // 5% to 40%
+            notifyListeners();
+          }
+        },
+      );
+
+      if (processResult.wasOptimized && processResult.isSuccess) {
+        fileToUpload = processResult.file;
+        isOptimizedFile = true;
+      } else if (clientProcessingStarted) {
+        _emitUiMessage('Falling back to server', VayuSnackBarType.warning);
+      }
+    } catch (e) {
+      AppLogger.log('⚠️ UploadStateManager: Client processing exception: $e. Falling back to server.');
+      if (clientProcessingStarted) {
+        _emitUiMessage('Falling back to server', VayuSnackBarType.warning);
+      }
+      fileToUpload = videoFile;
+      isOptimizedFile = false;
+    }
+
+    if (!_isCurrentOperation(operationId)) {
+      if (isOptimizedFile) _cleanupTempFile(fileToUpload);
+      return;
+    }
+
+    // 3. Setup Progress Listener
     final progressSubscription = _uploadService.uploadProgress.listen((p) {
       if (_isCurrentOperation(operationId) &&
           _status == UploadStatus.uploading) {
-        _setProgress(0.1 + (p * 0.4)); // Upload is 10% to 50% of total
+        _setProgress(0.40 + (p * 0.40)); // Upload is 40% to 80% of total
         notifyListeners();
       }
     });
 
+    File? thumbnailToUpload = request.thumbnail;
+    bool isAutoThumbnail = false;
+    if (thumbnailToUpload == null) {
+      try {
+        thumbnailToUpload = await ClientVideoProcessor.generateThumbnail(fileToUpload);
+        isAutoThumbnail = (thumbnailToUpload != null);
+      } catch (_) {}
+    }
+
     try {
-      // 3. Upload
+      // 4. Upload
       _status = UploadStatus.uploading;
       _currentPhase = 'upload';
       notifyListeners();
 
       final videoId = await _uploadService.uploadVideo(
-        videoFile: videoFile,
-        thumbnailFile: request.thumbnail,
+        videoFile: fileToUpload,
+        thumbnailFile: thumbnailToUpload,
         title: request.title,
         description: request.description,
-        metadata: _metadataFor(request, quizzes: request.quizzes),
+        metadata: _metadataFor(
+          request,
+          quizzes: request.quizzes,
+          isClientOptimized: isOptimizedFile,
+        ),
       );
 
       if (!_isCurrentOperation(operationId)) return;
 
       if (videoId != null) {
-        // 4. Wait for Processing
+        // 5. Wait for Processing / Publish
         _uploadedVideoIds.add(videoId);
-        final isProcessed = await _awaitProcessing(operationId);
-        if (!_isCurrentOperation(operationId)) return;
-        if (isProcessed) {
+        if (isOptimizedFile) {
+          // Client-optimized video is already published directly on backend. Skip polling!
+          _setProgress(1.0);
           _markCompleted();
         } else {
-          _setError('Video processing failed or timed out.');
+          final isProcessed = await _awaitProcessing(operationId);
+          if (!_isCurrentOperation(operationId)) return;
+          if (isProcessed) {
+            _markCompleted();
+          } else {
+            _setError('Video processing failed or timed out.');
+          }
         }
       } else {
         _setError('Upload failed. Please try again.');
@@ -402,6 +494,12 @@ class UploadStateManager extends ChangeNotifier {
       }
     } finally {
       await progressSubscription.cancel();
+      if (isOptimizedFile) {
+        _cleanupTempFile(fileToUpload);
+      }
+      if (isAutoThumbnail) {
+        _cleanupTempFile(thumbnailToUpload);
+      }
       if (_isCurrentOperation(operationId)) notifyListeners();
     }
   }
@@ -425,7 +523,7 @@ class UploadStateManager extends ChangeNotifier {
     _currentPhase = 'preparation';
     _errorMessage = null;
     _episodesUploaded = startIndex;
-    _setProgress(_uploadShare(startIndex, episodes.length));
+    _setProgress(_uploadShare(startIndex, episodes.length), allowReset: true);
     notifyListeners();
 
     // Validate the whole series up front. Discovering episode 4 is oversized
@@ -466,9 +564,64 @@ class UploadStateManager extends ChangeNotifier {
         if (!_isCurrentOperation(operationId)) return;
         final episode = episodes[i];
 
+        File episodeFileToUpload = episode.file;
+        bool isEpisodeOptimized = false;
+
+        _status = UploadStatus.preparing;
+        _currentPhase = 'preparing';
+        notifyListeners();
+
+        bool episodeProcessingStarted = false;
+        try {
+          final processResult = await ClientVideoProcessor.processVideo(
+            originalVideo: episode.file,
+            onStarted: () {
+              episodeProcessingStarted = true;
+              _emitUiMessage('Processing started...', VayuSnackBarType.info);
+            },
+            onProgress: (p) {
+              if (_isCurrentOperation(operationId) && _status == UploadStatus.preparing) {
+                final base = _uploadShare(i, episodes.length);
+                final span = _uploadShare(1, episodes.length) * 0.4;
+                _setProgress((base + p * span).clamp(0.0, 0.95));
+                notifyListeners();
+              }
+            },
+          );
+          if (processResult.wasOptimized && processResult.isSuccess) {
+            episodeFileToUpload = processResult.file;
+            isEpisodeOptimized = true;
+          } else if (episodeProcessingStarted) {
+            _emitUiMessage('Falling back to server', VayuSnackBarType.warning);
+          }
+        } catch (_) {
+          if (episodeProcessingStarted) {
+            _emitUiMessage('Falling back to server', VayuSnackBarType.warning);
+          }
+          episodeFileToUpload = episode.file;
+        }
+
+        if (!_isCurrentOperation(operationId)) {
+          if (isEpisodeOptimized) _cleanupTempFile(episodeFileToUpload);
+          return;
+        }
+
+        _status = UploadStatus.uploading;
+        _currentPhase = 'upload';
+        notifyListeners();
+
+        File? episodeThumbnail = episode.thumbnail;
+        bool isEpisodeAutoThumb = false;
+        if (episodeThumbnail == null) {
+          try {
+            episodeThumbnail = await ClientVideoProcessor.generateThumbnail(episodeFileToUpload);
+            isEpisodeAutoThumb = (episodeThumbnail != null);
+          } catch (_) {}
+        }
+
         final videoId = await _uploadService.uploadVideo(
-          videoFile: episode.file,
-          thumbnailFile: episode.thumbnail,
+          videoFile: episodeFileToUpload,
+          thumbnailFile: episodeThumbnail,
           title: episode.title,
           description: request.description,
           metadata: _metadataFor(
@@ -476,8 +629,16 @@ class UploadStateManager extends ChangeNotifier {
             quizzes: episode.quizzes,
             seriesId: seriesId,
             episodeNumber: i + 1,
+            isClientOptimized: isEpisodeOptimized,
           ),
         );
+
+        if (isEpisodeOptimized) {
+          _cleanupTempFile(episodeFileToUpload);
+        }
+        if (isEpisodeAutoThumb) {
+          _cleanupTempFile(episodeThumbnail);
+        }
 
         if (!_isCurrentOperation(operationId)) return;
 
@@ -532,6 +693,7 @@ class UploadStateManager extends ChangeNotifier {
     List<QuizModel>? quizzes,
     String? seriesId,
     int? episodeNumber,
+    bool isClientOptimized = false,
   }) {
     return {
       'link': request.link,
@@ -545,6 +707,7 @@ class UploadStateManager extends ChangeNotifier {
       'seriesId': seriesId,
       'episodeNumber': episodeNumber,
       'paidAccess': request.paidAccess,
+      'isClientOptimized': isClientOptimized,
       if (request.videoType != null) 'videoType': request.videoType,
     };
   }
@@ -665,13 +828,14 @@ class UploadStateManager extends ChangeNotifier {
       total == 0 ? 0.0 : (episodesDone / total) * 0.5;
 
   double _processingShare(Map<String, double> perVideo, int total) {
-    if (total == 0) return 0.5;
+    if (total == 0) return 0.8;
     final done = perVideo.values.fold<double>(0, (sum, v) => sum + v);
-    return 0.5 + (done / total) * 0.5;
+    return 0.8 + (done / total) * 0.2;
   }
 
-  void _setProgress(double value) {
-    _progress = value.clamp(0.0, 1.0);
+  void _setProgress(double value, {bool allowReset = false}) {
+    final clamped = value.clamp(0.0, 1.0);
+    _progress = allowReset ? clamped : max(_progress, clamped);
     _eta.add(_progress);
   }
 
@@ -723,5 +887,14 @@ class UploadStateManager extends ChangeNotifier {
     _invalidateActiveUpload();
     _clearState();
     notifyListeners();
+  }
+
+  void _cleanupTempFile(File? file) {
+    if (file == null) return;
+    try {
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {}
   }
 }

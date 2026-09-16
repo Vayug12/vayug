@@ -143,6 +143,7 @@ class AppButton extends StatelessWidget {
           ),
           SizedBox(width: AppSpacing.spacing2),
         ] else if (icon != null) ...[
+          icon!,
           SizedBox(width: AppSpacing.spacing2),
         ],
         Flexible(
@@ -227,6 +228,7 @@ class AppButton extends StatelessWidget {
       onTap: onPressed,
       behavior: HitTestBehavior.deferToChild,
       scaleDownFactor: 0.96,
+      callOnTapOnTapUp: false,
       child: buttonWidget,
     );
   }

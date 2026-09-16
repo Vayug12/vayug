@@ -1939,6 +1939,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                       width: (_screenWidth ?? MediaQuery.of(context).size.width) *
                           0.75,
                       child: FeedVisitNowButton(
+                        video: video,
                         url: video.validLinks.isNotEmpty
                             ? video.validLinks.first.url
                             : (video.link ?? ''),
@@ -2907,6 +2908,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
                                     return const SizedBox.shrink();
                                   }
                                   return FeedVisitNowButton(
+                                    video: widget.video,
                                     url: widget.video.validLinks.isNotEmpty
                                         ? widget.video.validLinks.first.url
                                         : (widget.video.link ?? ''),

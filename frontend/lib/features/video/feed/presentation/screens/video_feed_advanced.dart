@@ -1715,6 +1715,9 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
       // Update Notifiers with authoritative backend values
       countVN.value = updatedVideo.likes;
       likedVN.value = updatedVideo.isLiked;
+
+      // **PERSIST: Update local liked cache so cold start remains red**
+      _recordVideoLikePersistence(video.id, updatedVideo.isLiked);
     } catch (e) {
       AppLogger.log('❌ Error handling like: $e');
 
@@ -1729,6 +1732,8 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
       // Revert Model
       video.isLiked = wasLiked;
       video.likes = originalLikes;
+
+      _recordVideoLikePersistence(video.id, wasLiked);
 
       // Show error
       String errorMessage = 'Failed to like video';
@@ -1876,7 +1881,8 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
         return;
       }
 
-      final success = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      _showSnackBar('Opening link...', isError: false);
+      final success = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!success) {
         _showSnackBar(
           'Could not open link. The website may be down or temporarily unavailable.',
@@ -1894,7 +1900,7 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
     if (isError) {
       VayuSnackBar.showError(context, message);
     } else {
-      VayuSnackBar.showSuccess(context, message);
+      VayuSnackBar.showInfo(context, message, duration: const Duration(seconds: 2));
     }
   }
 

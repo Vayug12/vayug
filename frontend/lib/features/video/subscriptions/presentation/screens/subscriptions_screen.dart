@@ -249,8 +249,7 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
   Widget _buildSignInPrompt() {
     // The title names what is behind the gate; the button names the action.
     return const AuthSignInPrompt(
-      icon: Icons.people_outline,
-      title: 'Subscriber-only videos',
+      title: 'End-to-End encrypted videos',
     );
   }
 
@@ -276,7 +275,7 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(child: Text('No subscriber content yet'));
+    return const Center(child: Text('No End-to-End encrypted videos yet'));
   }
 
   // Note: _buildVideoCard was removed as it is replaced by the unified VayuVideoCard widget

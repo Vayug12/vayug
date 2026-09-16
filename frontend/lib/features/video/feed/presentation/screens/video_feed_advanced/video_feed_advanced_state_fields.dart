@@ -244,6 +244,7 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
   // **NEW: Granular Like State Notifiers (Keyed by Video ID)**
   final Map<String, ValueNotifier<bool>> _isLikedVN = {};
   final Map<String, ValueNotifier<int>> _likeCountVN = {};
+  final Set<String> _localLikedVideoIds = {};
 
   // Earnings cache
 
@@ -254,6 +255,7 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
   String get _kSavedPageKey => 'video_feed_saved_page';
   String get _kSavedStateTimestampKey => 'video_feed_saved_timestamp';
   String get _kSeenVideoKeysKey => 'video_feed_seen_video_keys';
+  String get _kLikedVideoIdsKey => 'video_feed_liked_video_ids';
 
   // Cold start tracking
   bool _isColdStart = true;

@@ -46,6 +46,9 @@ class UploadScreen extends ConsumerStatefulWidget {
 }
 
 class _UploadScreenState extends ConsumerState<UploadScreen> {
+  /// Feature flag for Paid Video upload. Set to true when testing and launching.
+  static const bool _enablePaidVideo = false;
+
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _linkController = TextEditingController();
   final ValueNotifier<List<VideoLink>> _links = ValueNotifier<List<VideoLink>>([]);
@@ -733,18 +736,20 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                     ? 'Available when the current upload finishes'
                     : null,
               ),
-              AppSpacing.vSpace16,
-              _buildChoiceCard(
-                icon: Icons.monetization_on_rounded,
-                title: 'Paid Video',
-                color: AppColors.primary,
-                onTap: _pickPaidVideo,
-                enabled: !ref.watch(uploadStateManagerProvider).isUploadInFlight,
-                isLoading: loadingActions.contains('paid'),
-                subtitle: ref.watch(uploadStateManagerProvider).isUploadInFlight
-                    ? 'Available when upload finishes'
-                    : 'Earn directly from viewers',
-              ),
+              if (_enablePaidVideo) ...[
+                AppSpacing.vSpace16,
+                _buildChoiceCard(
+                  icon: Icons.monetization_on_rounded,
+                  title: 'Paid Video',
+                  color: AppColors.primary,
+                  onTap: _pickPaidVideo,
+                  enabled: !ref.watch(uploadStateManagerProvider).isUploadInFlight,
+                  isLoading: loadingActions.contains('paid'),
+                  subtitle: ref.watch(uploadStateManagerProvider).isUploadInFlight
+                      ? 'Available when upload finishes'
+                      : 'Earn directly from viewers',
+                ),
+              ],
               AppSpacing.vSpace16,
               _buildChoiceCard(
                 icon: Icons.campaign,

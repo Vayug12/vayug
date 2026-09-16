@@ -457,7 +457,7 @@ class ProfileHeaderWidget extends ConsumerWidget {
           );
         },
         isFullWidth: true,
-        height: 48,
+        height: 40,
         // Profile-specific styling: white primary CTA when not subscribed
         activeBackgroundColor: AppColors.white,
         activeTextColor: AppColors.textInverse,

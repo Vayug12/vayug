@@ -55,11 +55,10 @@ class AdDetailsFormWidget extends StatelessWidget {
         TextFormField(
           controller: titleController,
           decoration: InputDecoration(
-            labelText:
-                isBanner ? 'Banner Title * (max 30 words)' : 'Ad Title *',
+            labelText: isBanner ? 'Banner Title *' : 'Ad Title *',
             hintText: isBanner
-                ? 'Enter a compelling title for your banner ad'
-                : 'Enter a compelling title for your ad',
+                ? 'Enter headline (max 30 words)'
+                : 'Enter ad title',
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
@@ -103,7 +102,7 @@ class AdDetailsFormWidget extends StatelessWidget {
             controller: descriptionController,
             decoration: InputDecoration(
               labelText: 'Description *',
-              hintText: 'Describe your ad content and call to action',
+              hintText: 'Enter ad description',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -149,7 +148,7 @@ class AdDetailsFormWidget extends StatelessWidget {
           controller: linkController,
           decoration: InputDecoration(
             labelText: isBanner ? 'Destination URL *' : 'Landing Page URL *',
-            hintText: 'https://your-website.com',
+            hintText: 'https://example.com',
             prefixIcon: const Icon(Icons.link),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -179,8 +178,8 @@ class AdDetailsFormWidget extends StatelessWidget {
               ),
             ),
             helperText: isBanner
-                ? 'Where users will go when they click the banner'
-                : 'Enter your website URL where users will land after clicking the ad',
+                ? 'Opens when users tap your ad'
+                : 'Website opened when users tap your ad',
             errorText: (isLinkValid == false) ? linkError : null,
             errorStyle: const TextStyle(color: AppColors.error, fontSize: 12),
           ),

@@ -46,7 +46,7 @@ class AdMultiLinkField extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Additional Destination Links',
+                  'Additional Links',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -55,7 +55,7 @@ class AdMultiLinkField extends StatelessWidget {
                 AppSpacing.vSpace4,
                 Text(
                   count > 0
-                      ? '$count link${count > 1 ? 's' : ''} configured (multi-link sheet)'
+                      ? '$count link${count > 1 ? 's' : ''} added'
                       : 'Optional: add multiple destination URLs',
                   style: AppTypography.labelSmall.copyWith(
                     color: AppColors.textSecondary,
@@ -81,7 +81,7 @@ class AdMultiLinkField extends StatelessWidget {
               ),
             ),
             child: Text(
-              count > 0 ? 'Edit ($count)' : '+ Add Links',
+              count > 0 ? 'Edit ($count)' : '+ Add',
               style: AppTypography.labelSmall.copyWith(
                 color: AppColors.primaryLight,
                 fontWeight: FontWeight.w600,

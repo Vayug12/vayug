@@ -146,6 +146,8 @@ router.get(['/video/:id', '/video/:id/:slug'], passiveVerifyToken, async (req, r
     }
     const sharedTimestampQuery = sharedTimestampParams.toString();
     const sharedTimestampSuffix = sharedTimestampQuery ? `?${sharedTimestampQuery}` : '';
+    const startSec = parseInt(sharedTimestampParams.get('t'), 10) || 0;
+    const endSec = parseInt(sharedTimestampParams.get('end'), 10) || 0;
 
     const canonicalVideoPath = buildVideoPath(video._id, video.videoName);
     const expectedSlug = slugifyVideoTitle(video.videoName);
@@ -219,15 +221,18 @@ router.get(['/video/:id', '/video/:id/:slug'], passiveVerifyToken, async (req, r
   <meta property="og:title" content="${safeVideoName}" />
   <meta property="og:description" content="${safeDescription}" />
   <meta property="og:image" content="${escapeHtml(finalThumbnailUrl)}" />
-  <meta name="theme-color" content="#2563eb" />
+  <meta name="theme-color" content="#0f172a" />
   ${videoStructuredData}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
       color-scheme: dark;
       --background: #0f172a;
       --surface: #1e293b;
-      --divider: #334155;
       --primary: #ffffff;
       --secondary: #94a3b8;
       --muted: #64748b;
@@ -246,19 +251,44 @@ router.get(['/video/:id', '/video/:id/:slug'], passiveVerifyToken, async (req, r
     }
     .page { min-height: 100vh; }
     .topbar {
-      height: 68px;
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       max-width: 1040px;
       margin: 0 auto;
       padding: 0 24px;
-      border-bottom: 1px solid rgba(51, 65, 85, 0.55);
     }
-    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--primary); text-decoration: none; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-    .brand-mark { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: var(--accent); color: white; font-size: 14px; font-weight: 700; }
-    .topbar-label { color: var(--muted); font-size: 13px; }
-    .content { width: min(100%, 1040px); margin: 0 auto; padding: 32px 24px 56px; }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .brand-text {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      user-select: none;
+    }
+    .topbar-btn {
+      display: inline-flex;
+      align-items: center;
+      height: 36px;
+      padding: 0 16px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--secondary);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 150ms ease, color 150ms ease;
+    }
+    .topbar-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+    }
+    .content { width: min(100%, 1040px); margin: 0 auto; padding: 12px 24px 48px; }
     .player-wrap { display: flex; justify-content: center; width: 100%; }
     .player {
       --media-ratio: ${playerAspectRatio};
@@ -269,45 +299,50 @@ router.get(['/video/:id', '/video/:id/:slug'], passiveVerifyToken, async (req, r
       justify-content: center;
       overflow: hidden;
       background: #020617;
-      border: 1px solid rgba(51, 65, 85, 0.7);
       border-radius: 18px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
     }
     video { display: block; width: 100%; height: 100%; object-fit: contain; outline: none; }
-    .meta { width: min(100%, 760px); margin: 0 auto; padding-top: 28px; }
-    .creator { display: inline-flex; align-items: center; gap: 10px; color: var(--secondary); font-size: 14px; margin-bottom: 14px; }
-    .creator-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--divider); color: var(--secondary); font-size: 12px; font-weight: 600; }
-    h1 { margin: 0; color: var(--primary); font-size: clamp(22px, 3vw, 28px); line-height: 1.2; letter-spacing: -0.025em; font-weight: 600; }
-    .details { margin: 10px 0 0; color: var(--secondary); font-size: 14px; line-height: 1.5; }
-    .actions { display: flex; align-items: center; gap: 12px; margin-top: 24px; }
-    .btn { min-height: 52px; padding: 0 20px; border-radius: 14px; font-size: 15px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 9px; transition: background 200ms ease, border-color 200ms ease, transform 200ms ease; }
+    .meta { width: min(100%, 760px); margin: 0 auto; padding-top: 24px; }
+    .creator { display: inline-flex; align-items: center; gap: 8px; color: var(--secondary); font-size: 14px; margin-bottom: 12px; }
+    .creator-mark { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--secondary); font-size: 11px; font-weight: 600; }
+    h1 { margin: 0; color: var(--primary); font-size: clamp(20px, 2.5vw, 26px); line-height: 1.25; letter-spacing: -0.02em; font-weight: 600; }
+    .details { margin: 8px 0 0; color: var(--secondary); font-size: 13px; line-height: 1.4; }
+    .actions { display: flex; margin-top: 20px; }
+    .btn {
+      width: 100%;
+      min-height: 52px;
+      padding: 0 24px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--accent);
+      color: #ffffff;
+      transition: background 150ms ease, transform 150ms ease;
+    }
     .btn:focus-visible { outline: 3px solid rgba(59, 130, 246, 0.45); outline-offset: 3px; }
-    .btn:hover { transform: translateY(-1px); }
-    .primary { flex: 1; background: var(--accent); color: #fff; }
-    .primary:hover { background: var(--accent-pressed); }
-    .secondary { flex: 1; color: var(--primary); background: transparent; border: 1px solid var(--divider); }
-    .secondary:hover { background: rgba(30, 41, 59, 0.7); border-color: #475569; }
+    .btn:hover { background: var(--accent-pressed); transform: translateY(-1px); }
     .btn svg { width: 18px; height: 18px; }
-    .footer-note { margin: 30px auto 0; width: min(100%, 760px); color: var(--muted); font-size: 12px; text-align: center; }
     @media (max-width: 640px) {
-      .topbar { height: 60px; padding: 0 18px; }
-      .topbar-label { display: none; }
-      .content { padding: 20px 16px 40px; }
+      .topbar { height: 56px; padding: 0 16px; }
+      .content { padding: 8px 16px 36px; }
       .player { border-radius: 16px; }
-      .meta { padding-top: 22px; }
-      .actions { flex-direction: column; align-items: stretch; margin-top: 20px; }
-      .btn { width: 100%; }
+      .meta { padding-top: 18px; }
     }
   </style>
 </head>
 <body>
   <div class="page">
     <header class="topbar">
-      <a class="brand" href="${publicSiteUrl}" aria-label="Vayug home">
-        <span class="brand-mark">V</span>
-        <span>Vayug</span>
+      <a class="brand" href="${publicSiteUrl}" aria-label="Vayu home">
+        <span class="brand-text">ᴠᴀʏᴜ</span>
       </a>
-      <span class="topbar-label">Shared video</span>
+      <a href="${playStoreUrl}" class="topbar-btn">Get app</a>
     </header>
     <main class="content">
       <div class="player-wrap">
@@ -318,19 +353,14 @@ router.get(['/video/:id', '/video/:id/:slug'], passiveVerifyToken, async (req, r
       <section class="meta" aria-labelledby="video-title">
         <div class="creator"><span class="creator-mark">${creatorInitial}</span><span>${safeCreatorName}</span></div>
         <h1 id="video-title">${safeVideoName}</h1>
-        <p class="details">${Number(video.views || 0).toLocaleString()} views <span aria-hidden="true">&bull;</span> Shared from Vayug</p>
+        ${video.views ? `<p class="details">${Number(video.views).toLocaleString()} views</p>` : ''}
         <div class="actions">
-          <a href="${intentUrl}" class="btn primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+          <a href="${intentUrl}" class="btn">
             <span>Open in Vayug</span>
-          </a>
-          <a href="${playStoreUrl}" class="btn secondary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
-            <span>Get the app</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
           </a>
         </div>
       </section>
-      <p class="footer-note">Watch, discover, and share on Vayug.</p>
     </main>
   </div>
 
@@ -338,12 +368,32 @@ router.get(['/video/:id', '/video/:id/:slug'], passiveVerifyToken, async (req, r
   <script>
     const video = document.getElementById('v');
     const src = '${finalStreamUrl}';
-    if(Hls.isSupported() && src.includes('.m3u8')) {
-      const hls = new Hls(); hls.loadSource(src); hls.attachMedia(video);
-    } else { video.src = src; }
+    const startSec = ${startSec};
+    const endSec = ${endSec};
 
-    // Smart handoff: If opened on an Android device inside a browser/webview,
-    // automatically attempt opening the installed Vayug app via Android Intent.
+    function applyTimestamps() {
+      if (startSec > 0 && video.currentTime < startSec) {
+        video.currentTime = startSec;
+      }
+      if (endSec > startSec) {
+        video.addEventListener('timeupdate', function() {
+          if (video.currentTime >= endSec) {
+            video.pause();
+          }
+        });
+      }
+    }
+
+    if(Hls.isSupported() && src.includes('.m3u8')) {
+      const hls = new Hls();
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, applyTimestamps);
+    } else {
+      video.src = src;
+      video.addEventListener('loadedmetadata', applyTimestamps);
+    }
+
     (function() {
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isEmbed = window !== window.top;

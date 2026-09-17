@@ -149,7 +149,7 @@ export const getCreatorAnalytics = async (req, res) => {
       date: { $gte: fourteenDaysAgo }
     }).sort({ date: 1 }).lean();
 
-    let totalViews = 0, totalWatchTime = 0, totalSkips = 0, totalShares = 0;
+    let totalViews = 0, totalWatchTime = 0, totalSkips = 0, totalShares = 0, totalLinkClicks = 0;
     let currViews = 0, prevViews = 0, currWatch = 0, prevWatch = 0;
 
     dailyStats.forEach(stat => {
@@ -157,6 +157,7 @@ export const getCreatorAnalytics = async (req, res) => {
       totalWatchTime += (stat.watchTime || 0);
       totalSkips += (stat.skips || 0);
       totalShares += (stat.shares || 0);
+      totalLinkClicks += (stat.linkClicks || 0);
 
       const statDate = new Date(stat.date);
       if (statDate >= sevenDaysAgo) {
@@ -167,6 +168,13 @@ export const getCreatorAnalytics = async (req, res) => {
         prevWatch += (stat.watchTime || 0);
       }
     });
+
+    const videoLinkClicksAgg = await Video.aggregate([
+      { $match: { uploader: creatorId } },
+      { $group: { _id: null, total: { $sum: "$linkClicks" } } }
+    ]);
+    const lifetimeLinkClicks = videoLinkClicksAgg[0]?.total || 0;
+    const effectiveLinkClicks = Math.max(totalLinkClicks, lifetimeLinkClicks);
 
     const overallAvgDuration = currViews > 0 ? (currWatch / currViews) : 0;
     const overallSkipRate = totalViews > 0 ? (totalSkips / totalViews) : 0;
@@ -242,7 +250,8 @@ export const getCreatorAnalytics = async (req, res) => {
         avgWatchDuration: Math.round(overallAvgDuration),
         skipRate: parseFloat(overallSkipRate.toFixed(2)),
         viewsGrowth: Math.round(calcGrowth(currViews, prevViews)),
-        watchTimeGrowth: Math.round(calcGrowth(currWatch, prevWatch))
+        watchTimeGrowth: Math.round(calcGrowth(currWatch, prevWatch)),
+        totalLinkClicks: effectiveLinkClicks || 0
       },
       topVideos: topVideosFormatted,
       dailyPerformance: sparklineData,
@@ -256,5 +265,36 @@ export const getCreatorAnalytics = async (req, res) => {
   } catch (error) {
     console.error('❌ Error in getCreatorAnalytics:', error);
     res.status(500).json({ error: 'Failed to fetch creator analytics' });
+  }
+};
+
+export const recordLinkClick = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const video = await Video.findByIdAndUpdate(
+      id,
+      { $inc: { linkClicks: 1 } },
+      { new: true }
+    ).select('uploader linkClicks');
+
+    if (!video) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    if (video.uploader) {
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+
+      await CreatorDailyStats.findOneAndUpdate(
+        { creatorId: video.uploader, date: today },
+        { $inc: { linkClicks: 1 } },
+        { upsert: true, new: true }
+      );
+    }
+
+    res.json({ success: true, linkClicks: video.linkClicks || 0 });
+  } catch (error) {
+    console.error('❌ Error recording link click:', error);
+    res.status(500).json({ error: 'Failed to record link click' });
   }
 };

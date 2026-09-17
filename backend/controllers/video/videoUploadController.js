@@ -75,7 +75,44 @@ export const uploadVideo = async (req, res) => {
       return res.status(401).json({ error: 'Google ID not found in token' });
     }
 
-    const { videoName, description, videoType, link, category, tags, allowedSubscribers, targetProfessionIds, paidAccess } = req.body;
+    const { videoName, description, videoType, link, links, category, tags, allowedSubscribers, targetProfessionIds, paidAccess } = req.body;
+
+    // Parse links array if provided
+    let parsedLinks = [];
+    if (Array.isArray(links)) {
+      parsedLinks = links.map(l => {
+        if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim(), showAtSeconds: 0 };
+        if (l && typeof l === 'object' && l.url) {
+          return {
+            title: (l.title || '').trim(),
+            url: String(l.url).trim(),
+            showAtSeconds: Math.max(0, parseInt(l.showAtSeconds) || 0)
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    } else if (typeof links === 'string') {
+      try {
+        const decoded = JSON.parse(links);
+        if (Array.isArray(decoded)) {
+          parsedLinks = decoded.map(l => {
+            if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim(), showAtSeconds: 0 };
+            if (l && typeof l === 'object' && l.url) {
+              return {
+                title: (l.title || '').trim(),
+                url: String(l.url).trim(),
+                showAtSeconds: Math.max(0, parseInt(l.showAtSeconds) || 0)
+              };
+            }
+            return null;
+          }).filter(Boolean);
+        }
+      } catch (_) {}
+    }
+    if (parsedLinks.length === 0 && link && String(link).trim()) {
+      parsedLinks = [{ title: '', url: String(link).trim(), showAtSeconds: 0 }];
+    }
+    const primaryLink = parsedLinks.length > 0 ? parsedLinks[0].url : (link ? String(link).trim() : '');
 
     if (targetProfessionIds != null && (
       !Array.isArray(targetProfessionIds) ||
@@ -211,7 +248,8 @@ export const uploadVideo = async (req, res) => {
     const video = new Video({
       videoName: videoName,
       description: description || '',
-      link: link || '',
+      link: primaryLink,
+      links: parsedLinks,
       uploader: user._id,
       videoType: finalVideoType,
       mediaType: 'video',

@@ -553,6 +553,7 @@ class _EditVideoDetailsState extends State<EditVideoDetails> {
                               showAtSeconds: l.showAtSeconds,
                             ))
                         .toList(),
+                    videoDuration: widget.video.duration?.inSeconds.toDouble() ?? 0.0,
                     onSave: (saved) {
                       setState(() {
                         _links = saved

@@ -307,6 +307,7 @@ class _UploadAdvancedSettingsScreenState extends State<UploadAdvancedSettingsScr
                 showAtSeconds: l.showAtSeconds,
               ))
           .toList(),
+      videoDuration: widget.videoDuration,
       onSave: (saved) {
         final videoLinks = saved
             .map((item) => VideoLink(

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:vayug/core/design/colors.dart';
+import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/shared/services/share_service.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 import 'package:vayug/shared/widgets/vayu_bottom_sheet.dart';
 
-/// Bottom sheet offering "Share full video" and "Share a section" with
+/// Bottom sheet offering "Full video" and "Section" sharing with
 /// timestamps. Used by both the Yug feed and the Vayu long-form player so
 /// sharing behaves identically everywhere in the app.
 class ShareOptionsSheet {
@@ -47,21 +48,21 @@ class ShareOptionsSheet {
                 Icons.video_library_outlined,
                 color: AppColors.textPrimary,
               ),
-              title: const Text('Share full video'),
+              title: const Text('Full video'),
               onTap: () {
                 Navigator.pop(context);
                 ShareService().shareVideo(video);
               },
             ),
             if (canSelectSection) ...[
-              const Divider(height: 20),
+              Divider(height: AppSpacing.spacing5, color: AppColors.divider),
               Text(
-                'Share a section',
+                'Section',
                 style: AppTypography.labelLarge.copyWith(
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 4),
+              AppSpacing.vSpace4,
               Text(
                 '${_formatDuration(Duration(seconds: startSeconds))} – ${_formatDuration(Duration(seconds: endSeconds))}',
                 style: AppTypography.bodySmall.copyWith(
@@ -97,9 +98,9 @@ class ShareOptionsSheet {
               ),
             ] else
               Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: EdgeInsets.only(top: AppSpacing.spacing2),
                 child: Text(
-                  'The video needs to finish loading before a section can be selected.',
+                  'Loading video...',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                   ),

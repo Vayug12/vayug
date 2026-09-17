@@ -54,6 +54,13 @@ class PictureInPictureService {
   /// no way to know which feed asked for PiP, only that PiP is happening.
   final ValueNotifier<bool> isActive = ValueNotifier<bool>(false);
 
+  /// Whether the given [ownerId] is the registered active PiP owner and auto-enter is expected.
+  bool isOwnerAutoEnterEligible(String ownerId) =>
+      _activeOwnerId == ownerId && _desiredAutoEnterEnabled && _lastIsPlaying;
+
+  /// Whether PiP is currently active or preparing for entry.
+  bool get isPiPActive => isActive.value;
+
   Stream<PictureInPictureModeEvent> get modeChanges => _modeChanges.stream;
   Stream<PictureInPicturePlaybackEvent> get playbackRequests =>
       _playbackRequests.stream;

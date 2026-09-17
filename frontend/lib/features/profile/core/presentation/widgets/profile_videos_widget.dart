@@ -647,7 +647,7 @@ class ProfileVideosWidget extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 height: 1.3,
                               ),
-                              maxLines: 2,
+                              maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),

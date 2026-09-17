@@ -40,6 +40,10 @@ const creatorDailyStatsSchema = new mongoose.Schema({
   directNotificationsSent: {
     type: Number,
     default: 0
+  },
+  linkClicks: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

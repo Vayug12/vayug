@@ -42,10 +42,33 @@ export const updateVideo = async (req, res) => {
       let parsedLinks = [];
       if (Array.isArray(links)) {
         parsedLinks = links.map(l => {
-          if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim() };
-          if (l && typeof l === 'object' && l.url) return { title: (l.title || '').trim(), url: String(l.url).trim() };
+          if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim(), showAtSeconds: 0 };
+          if (l && typeof l === 'object' && l.url) {
+            return {
+              title: (l.title || '').trim(),
+              url: String(l.url).trim(),
+              showAtSeconds: Math.max(0, parseInt(l.showAtSeconds) || 0)
+            };
+          }
           return null;
         }).filter(Boolean);
+      } else if (typeof links === 'string') {
+        try {
+          const decoded = JSON.parse(links);
+          if (Array.isArray(decoded)) {
+            parsedLinks = decoded.map(l => {
+              if (typeof l === 'string' && l.trim()) return { title: '', url: l.trim(), showAtSeconds: 0 };
+              if (l && typeof l === 'object' && l.url) {
+                return {
+                  title: (l.title || '').trim(),
+                  url: String(l.url).trim(),
+                  showAtSeconds: Math.max(0, parseInt(l.showAtSeconds) || 0)
+                };
+              }
+              return null;
+            }).filter(Boolean);
+          }
+        } catch (_) {}
       }
 
       for (let i = 0; i < parsedLinks.length; i++) {

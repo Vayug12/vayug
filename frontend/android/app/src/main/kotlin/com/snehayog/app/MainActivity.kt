@@ -235,11 +235,28 @@ class MainActivity : FlutterActivity() {
 
     private fun prepareFlutterSurfaceAndEnterPictureInPicture() {
         pipEntryPending = true
+        var handled = false
+        val timeoutRunnable = Runnable {
+            if (!handled && !isInPictureInPictureMode && isPictureInPictureSupported()) {
+                handled = true
+                pipEntryPending = false
+                try {
+                    enterPictureInPictureMode(buildPictureInPictureParams())
+                } catch (_: Exception) {
+                    notifyPictureInPictureMode(false)
+                }
+            }
+        }
+        window.decorView.postDelayed(timeoutRunnable, 250)
+
         pipMethodChannel.invokeMethod(
             "prepareToEnter",
             null,
             object : MethodChannel.Result {
                 override fun success(result: Any?) {
+                    window.decorView.removeCallbacks(timeoutRunnable)
+                    if (handled) return
+                    handled = true
                     pipEntryPending = false
                     val isPrepared = result as? Boolean ?: false
                     val canEnter = isPrepared &&
@@ -257,11 +274,17 @@ class MainActivity : FlutterActivity() {
                     errorMessage: String?,
                     errorDetails: Any?
                 ) {
+                    window.decorView.removeCallbacks(timeoutRunnable)
+                    if (handled) return
+                    handled = true
                     pipEntryPending = false
                     notifyPictureInPictureMode(false)
                 }
 
                 override fun notImplemented() {
+                    window.decorView.removeCallbacks(timeoutRunnable)
+                    if (handled) return
+                    handled = true
                     pipEntryPending = false
                     notifyPictureInPictureMode(false)
                 }
@@ -353,11 +376,7 @@ class MainActivity : FlutterActivity() {
             .setActions(listOf(action))
         pipSourceRect?.let(builder::setSourceRectHint)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Framework auto-enter can also react to system permission
-            // surfaces. That is how a notification dialog can end up inside
-            // PiP. We enter explicitly from onUserLeaveHint only after Flutter
-            // has rendered its video-only frame.
-            builder.setAutoEnterEnabled(false)
+            builder.setAutoEnterEnabled(pipAutoEnterEnabled && pipIsPlaying)
             builder.setSeamlessResizeEnabled(true)
         }
         return builder.build()

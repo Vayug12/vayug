@@ -57,6 +57,7 @@ router.post('/:id/skip', passiveVerifyToken, interactionController.trackSkip);
 router.post('/:id/like', verifyToken, interactionController.toggleLike);
 router.delete('/:id/like', verifyToken, interactionController.deleteLike);
 router.post('/:id/increment-view', interactionController.incrementView);
+router.post('/:id/link-click', analyticsController.recordLinkClick);
 
 /**
  * Video Deletion Routes

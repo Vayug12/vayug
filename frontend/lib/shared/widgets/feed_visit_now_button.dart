@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
+import 'package:vayug/shared/config/app_config.dart';
+import 'package:vayug/shared/services/http_client_service.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
@@ -37,12 +40,27 @@ class _FeedVisitNowButtonState extends State<FeedVisitNowButton> {
   bool _isLoading = false;
 
   Future<void> _handlePress() async {
+    final video = widget.video;
+    if (video != null && video.id.isNotEmpty) {
+      unawaited(
+        httpClientService
+            .post(
+              Uri.parse('${AppConfig.baseUrl}/api/videos/${video.id}/link-click'),
+            )
+            .then(
+              (_) {},
+              onError: (e) {
+                AppLogger.log('⚠️ Failed to record link click: $e');
+              },
+            ),
+      );
+    }
+
     if (widget.onCustomTap != null) {
       widget.onCustomTap!();
       return;
     }
 
-    final video = widget.video;
     if (video != null && video.validLinks.length > 1) {
       LinksBottomSheet.show(
         context,

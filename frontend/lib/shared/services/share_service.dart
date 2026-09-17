@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:vayug/features/ads/data/carousel_ad_model.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
@@ -16,7 +17,7 @@ class ShareService {
     Duration? endAt,
   }) async {
     try {
-      final shareText = _generateVideoShareText(
+      final shareText = generateVideoShareText(
         video,
         startAt: startAt,
         endAt: endAt,
@@ -30,14 +31,15 @@ class ShareService {
 
   Future<void> shareAd(CarouselAdModel ad) async {
     try {
-      final shareText = _generateAdShareText(ad);
+      final shareText = generateAdShareText(ad);
       await SharePlus.instance.share(ShareParams(text: shareText));
     } catch (e) {
       AppLogger.log('ShareService: Error sharing ad: $e');
     }
   }
 
-  String _generateVideoShareText(
+  @visibleForTesting
+  String generateVideoShareText(
     VideoModel video, {
     Duration? startAt,
     Duration? endAt,
@@ -58,13 +60,14 @@ class ShareService {
       video.videoName,
       queryParameters: queryParameters,
     );
-    final sectionLabel = endSeconds != null && endSeconds > startSeconds
-        ? ' Watch the shared section.'
-        : startSeconds > 0
-            ? ' Starts at ${_formatTimestamp(startSeconds)}.'
-            : '';
 
-    return 'Watch "${video.videoName}" on Vayug.$sectionLabel\n\n$shareLink';
+    if (endSeconds != null && endSeconds > startSeconds) {
+      return '${video.videoName} (${_formatTimestamp(startSeconds)} – ${_formatTimestamp(endSeconds)})\n$shareLink';
+    } else if (startSeconds > 0) {
+      return '${video.videoName} (from ${_formatTimestamp(startSeconds)})\n$shareLink';
+    }
+
+    return shareLink;
   }
 
   String _formatTimestamp(int seconds) {
@@ -75,12 +78,15 @@ class ShareService {
     if (duration.inHours > 0) {
       return '${duration.inHours}:$minutes:$remainingSeconds';
     }
-    return '${duration.inMinutes}:$remainingSeconds';
+    return '$minutes:$remainingSeconds';
   }
 
-  String _generateAdShareText(CarouselAdModel ad) {
-    final link = ad.callToActionUrl;
-    return 'Check out this ad on Vayu: ${ad.slides.firstOrNull?.title ?? "Great content"} \n$link';
+  @visibleForTesting
+  String generateAdShareText(CarouselAdModel ad) {
+    final link = ad.callToActionUrl.trim();
+    final title = ad.slides.firstOrNull?.title ?? "Featured";
+    if (link.isEmpty) return title;
+    return '$title\n$link';
   }
 
   Future<void> _incrementVideoShareCount(String videoId) async {

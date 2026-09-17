@@ -2592,7 +2592,7 @@ class _VayuLongFormPlayerScreenState
 
     return SafeArea(
         top: isPortrait,
-        bottom: false,
+        bottom: _isFullScreenManual && isPortrait,
         left: false,
         right: false,
         child: VayuFeedItem(

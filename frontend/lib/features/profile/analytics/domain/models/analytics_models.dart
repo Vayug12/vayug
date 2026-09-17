@@ -33,6 +33,7 @@ class CoreAnalytics {
   final double skipRate;
   final int viewsGrowth;
   final int watchTimeGrowth;
+  final int totalLinkClicks;
 
   CoreAnalytics({
     required this.totalViews,
@@ -42,6 +43,7 @@ class CoreAnalytics {
     required this.skipRate,
     required this.viewsGrowth,
     required this.watchTimeGrowth,
+    this.totalLinkClicks = 0,
   });
 
   factory CoreAnalytics.fromJson(Map<String, dynamic> json) {
@@ -53,6 +55,7 @@ class CoreAnalytics {
       skipRate: (json['skipRate'] as num?)?.toDouble() ?? 0.0,
       viewsGrowth: (json['viewsGrowth'] as num?)?.toInt() ?? 0,
       watchTimeGrowth: (json['watchTimeGrowth'] as num?)?.toInt() ?? 0,
+      totalLinkClicks: (json['totalLinkClicks'] as num?)?.toInt() ?? 0,
     );
   }
 }

@@ -38,6 +38,7 @@ class PlaybackSession {
   bool tabActive = true;
   bool appForeground = true;
   bool userPaused = false;
+  bool pipActive = false;
   bool released = false;
 }
 
@@ -134,8 +135,7 @@ class PlaybackCoordinator {
       !session.released &&
       session.routeActive &&
       session.tabActive &&
-      session.appForeground &&
-      _appForeground;
+      ((session.appForeground && _appForeground) || session.pipActive);
 
   /// Picks the on-screen surface and notifies the handover.
   ///
@@ -213,8 +213,29 @@ class PlaybackCoordinator {
     }
     if (!foreground) {
       for (final session in _sessions.values) {
-        _pauseController(session);
+        if (!session.pipActive) {
+          _pauseController(session);
+        }
       }
+      final currentOwner = _ownerId != null ? _sessions[_ownerId] : null;
+      if (currentOwner == null || !currentOwner.pipActive) {
+        _ownerId = null;
+      }
+    }
+    _recomputeActiveSurface();
+  }
+
+  /// Informs the coordinator that [session] is rendering for Picture-in-Picture.
+  /// While [active] is true, the session remains eligible to play even when the
+  /// host application leaves the foreground.
+  void setPiPActive(PlaybackSession session, bool active) {
+    if (!_isLive(session)) return;
+    if (session.pipActive == active) return;
+    session.pipActive = active;
+    AppLogger.log(
+        'PlaybackCoordinator: session ${session.id} (${session.source}) pipActive -> $active');
+    if (!active && _ownerId == session.id && !_appForeground) {
+      _pauseController(session);
       _ownerId = null;
     }
     _recomputeActiveSurface();

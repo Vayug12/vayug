@@ -21,12 +21,14 @@ class PromotionalLinksScreen extends StatefulWidget {
   final List<LinkItemData> initialLinks;
   final ValueChanged<List<LinkItemData>> onSave;
   final int maxLinks;
+  final double videoDuration;
 
   const PromotionalLinksScreen({
     super.key,
     required this.initialLinks,
     required this.onSave,
     this.maxLinks = 5,
+    this.videoDuration = 0.0,
   });
 
   /// Navigates to the PromotionalLinksScreen
@@ -35,6 +37,7 @@ class PromotionalLinksScreen extends StatefulWidget {
     required List<LinkItemData> initialLinks,
     required ValueChanged<List<LinkItemData>> onSave,
     int maxLinks = 5,
+    double videoDuration = 0.0,
   }) {
     return Navigator.push<List<LinkItemData>>(
       context,
@@ -43,6 +46,7 @@ class PromotionalLinksScreen extends StatefulWidget {
           initialLinks: initialLinks,
           onSave: onSave,
           maxLinks: maxLinks,
+          videoDuration: videoDuration,
         ),
       ),
     );
@@ -72,6 +76,7 @@ class _PromotionalLinksScreenState extends State<PromotionalLinksScreen> {
       MaterialPageRoute(
         builder: (_) => PromotionalLinkEditorScreen(
           initialLink: existingLink,
+          videoDuration: widget.videoDuration,
         ),
       ),
     );
@@ -110,8 +115,6 @@ class _PromotionalLinksScreenState extends State<PromotionalLinksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canAddMore = _links.length < widget.maxLinks;
-
     return Scaffold(
       backgroundColor: AppColors.backgroundPrimary,
       appBar: AppBar(
@@ -351,10 +354,12 @@ class _PromotionalLinksScreenState extends State<PromotionalLinksScreen> {
 /// Gives full focus without visual clutter or cramped keyboard behavior.
 class PromotionalLinkEditorScreen extends StatefulWidget {
   final LinkItemData? initialLink;
+  final double videoDuration;
 
   const PromotionalLinkEditorScreen({
     super.key,
     this.initialLink,
+    this.videoDuration = 0.0,
   });
 
   @override
@@ -379,7 +384,11 @@ class _PromotionalLinkEditorScreenState extends State<PromotionalLinkEditorScree
     final link = widget.initialLink;
     _titleController = TextEditingController(text: link?.title ?? '');
     _urlController = TextEditingController(text: link?.url ?? '');
+    final int maxSec = widget.videoDuration > 0 ? widget.videoDuration.floor() : 120;
     _showAtSeconds = link?.showAtSeconds ?? 0;
+    if (maxSec > 0 && _showAtSeconds > maxSec) {
+      _showAtSeconds = maxSec;
+    }
 
     if (link != null && link.url.isNotEmpty) {
       final uri = Uri.tryParse(link.url);
@@ -532,13 +541,13 @@ class _PromotionalLinkEditorScreenState extends State<PromotionalLinkEditorScree
       return;
     }
 
-    final title = _titleController.text.trim();
-    final effectiveTitle = title.isNotEmpty ? title : 'Visit Now';
+    const effectiveTitle = 'Visit Now';
 
+    final int maxSec = widget.videoDuration > 0 ? widget.videoDuration.floor() : 120;
     final result = LinkItemData(
       url: formattedUrl,
       title: effectiveTitle,
-      showAtSeconds: _showAtSeconds,
+      showAtSeconds: _showAtSeconds.clamp(0, maxSec > 0 ? maxSec : 120),
     );
 
     Navigator.of(context).pop(result);
@@ -775,10 +784,10 @@ class _PromotionalLinkEditorScreenState extends State<PromotionalLinkEditorScree
                         style: BorderStyle.solid,
                       ),
                     ),
-                    child: Center(
+                    child: const Center(
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children:  [
                           Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 22),
                           SizedBox(width: 8),
                           Flexible(
@@ -800,7 +809,6 @@ class _PromotionalLinkEditorScreenState extends State<PromotionalLinkEditorScree
                 ),
               ],
             ],
-
             const SizedBox(height: 24),
 
             // Button Title (Call to Action)
@@ -837,65 +845,86 @@ class _PromotionalLinkEditorScreenState extends State<PromotionalLinkEditorScree
               ),
             ),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundSecondary,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.borderSecondary.withValues(alpha: 0.5)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Builder(
+              builder: (context) {
+                final int maxSec = widget.videoDuration > 0 ? widget.videoDuration.floor() : 120;
+                final double sliderMax = maxSec > 0 ? maxSec.toDouble() : 1.0;
+                final int divisions = maxSec > 0 ? maxSec : 1;
+                final int clampedSeconds = _showAtSeconds.clamp(0, maxSec > 0 ? maxSec : 120);
+
+                final quickSeconds = [0, 5, 10, 15, 30, 60].where((s) => s <= maxSec).toList();
+                if (maxSec > 0 && !quickSeconds.contains(maxSec) && maxSec <= 120) {
+                  quickSeconds.add(maxSec);
+                  quickSeconds.sort();
+                }
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundSecondary,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderSecondary.withValues(alpha: 0.5)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _showAtSeconds == 0 ? 'From start (0s)' : 'Appears after ${_showAtSeconds}s',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            clampedSeconds == 0
+                                ? 'From start (0s)'
+                                : 'Appears after ${clampedSeconds}s' +
+                                    (widget.videoDuration > 0 ? ' (Video: ${maxSec}s)' : ''),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          Text(
+                            '${clampedSeconds}s',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        '${_showAtSeconds}s',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(height: 10),
+                      Slider(
+                        value: clampedSeconds.toDouble().clamp(0.0, sliderMax),
+                        min: 0,
+                        max: sliderMax,
+                        divisions: divisions,
+                        activeColor: AppColors.primary,
+                        inactiveColor: AppColors.backgroundTertiary,
+                        onChanged: maxSec <= 0
+                            ? null
+                            : (val) {
+                                setState(() {
+                                  _showAtSeconds = val.round().clamp(0, maxSec);
+                                });
+                              },
+                      ),
+                      if (quickSeconds.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          children: quickSeconds.map((s) {
+                            final selected = clampedSeconds == s;
+                            return ChoiceChip(
+                              label: Text('${s}s'),
+                              selected: selected,
+                              selectedColor: AppColors.primary,
+                              backgroundColor: AppColors.backgroundTertiary,
+                              labelStyle: TextStyle(
+                                color: selected ? Colors.white : AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                              onSelected: (_) => setState(() => _showAtSeconds = s.clamp(0, maxSec)),
+                            );
+                          }).toList(),
                         ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Slider(
-                    value: _showAtSeconds.toDouble(),
-                    min: 0,
-                    max: 120,
-                    divisions: 24,
-                    activeColor: AppColors.primary,
-                    inactiveColor: AppColors.backgroundTertiary,
-                    onChanged: (val) {
-                      setState(() {
-                        _showAtSeconds = val.round();
-                      });
-                    },
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    children: [0, 5, 10, 15, 30].map((s) {
-                      final selected = _showAtSeconds == s;
-                      return ChoiceChip(
-                        label: Text('${s}s'),
-                        selected: selected,
-                        selectedColor: AppColors.primary,
-                        backgroundColor: AppColors.backgroundTertiary,
-                        labelStyle: TextStyle(
-                          color: selected ? Colors.white : AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                        onSelected: (_) => setState(() => _showAtSeconds = s),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
 
             const SizedBox(height: 36),

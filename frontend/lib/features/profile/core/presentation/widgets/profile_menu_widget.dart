@@ -23,6 +23,7 @@ class ProfileMenuWidget extends StatelessWidget {
   final VoidCallback? onShowWhatsApp;
   final VoidCallback? onShowFAQ;
   final VoidCallback? onShowFeedback;
+  final VoidCallback? onManageVideos;
   final VoidCallback? onEnterSelectionMode;
   final VoidCallback? onLogout;
   final VoidCallback? onGoogleSignIn;
@@ -39,6 +40,7 @@ class ProfileMenuWidget extends StatelessWidget {
     this.onShowWhatsApp,
     this.onShowFAQ,
     this.onShowFeedback,
+    this.onManageVideos,
     this.onEnterSelectionMode,
     this.onLogout,
     this.onGoogleSignIn,
@@ -106,11 +108,15 @@ class ProfileMenuWidget extends StatelessWidget {
                     icon: HugeIcons.strokeRoundedVideo01,
                     onTap: () {
                       Navigator.pop(context);
-                      _handleManageVideos(context, stateManager);
+                      if (onManageVideos != null) {
+                        onManageVideos!.call();
+                      } else {
+                        _handleManageVideos(context, stateManager);
+                      }
                     },
                   ),
                   _DrawerMenuItem(
-                    title: 'Manage Content',
+                    title: 'Delete Content',
                     icon: HugeIcons.strokeRoundedDelete02,
                     onTap: () {
                       Navigator.pop(context);
@@ -333,12 +339,11 @@ class ProfileMenuWidget extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.divider),
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 itemCount: videos.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.divider),
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
                 itemBuilder: (ctx, index) {
                   final video = videos[index];
                   return ListTile(
@@ -376,12 +381,6 @@ class ProfileMenuWidget extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: Text(
-                      video.videoType.toUpperCase(),
-                      style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.textTertiary,
-                      ),
-                    ),
                     trailing: const Icon(
                       Icons.arrow_forward_ios_rounded,
                       size: 14,
@@ -389,13 +388,13 @@ class ProfileMenuWidget extends StatelessWidget {
                     ),
                     onTap: () async {
                       Navigator.pop(sheetContext);
-                      final result = await Navigator.push<Map<String, dynamic>>(
-                        context,
+                      final rootNav = Navigator.of(context, rootNavigator: true);
+                      final result = await rootNav.push<Map<String, dynamic>>(
                         MaterialPageRoute(
                           builder: (context) => EditVideoDetails(video: video),
                         ),
                       );
-                      if (result != null && context.mounted) {
+                      if (result != null) {
                         stateManager.updateVideoInList(video.id, result);
                         stateManager.refreshData();
                       }

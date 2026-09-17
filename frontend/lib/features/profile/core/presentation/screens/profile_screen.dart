@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:vayug/core/design/radius.dart';
 import 'package:flutter/material.dart';
 import 'package:vayug/features/profile/core/presentation/screens/edit_profile_screen.dart';
+import 'package:vayug/features/video/edit/presentation/screens/edit_video_details.dart';
 import 'package:provider/provider.dart' as p;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,7 +16,6 @@ import 'package:flutter/foundation.dart';
 import 'package:vayug/core/providers/profile_providers.dart';
 import 'package:vayug/features/video/core/data/services/video_cache_proxy_service.dart';
 import 'package:vayug/shared/services/profile_screen_logger.dart';
-import 'package:vayug/shared/services/app_remote_config_service.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'dart:async';
@@ -498,7 +498,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Future<void> _handleReferFriends() async {
     try {
       // Build a referral link with user code if available
-      String base = 'https://snehayog.site';
       String referralCode = '';
       final userData = _profileStateManager.getUserData();
       final token = userData?['token'];
@@ -1039,6 +1038,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           onShowWhatsApp: _openWhatsAppGroupChat,
                           onShowFAQ: _showFAQDialog,
                           onShowFeedback: _showFeedbackDialog,
+                          onManageVideos: () =>
+                              _handleManageVideos(activeManager),
                           onEnterSelectionMode: () =>
                               activeManager.enterSelectionMode(),
                           onLogout: _handleLogout,
@@ -1508,58 +1509,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
   }
 
-  Widget? _buildAppBarProfessionBadge(
-    ProfileStateManager stateManager,
-    bool isViewingOwnProfile,
-  ) {
-    final profession = stateManager.userData?['profession'];
-    final professionLabel =
-        profession is Map ? profession['label']?.toString().trim() : null;
-    final professionFeatureEnabled = AppRemoteConfigService
-            .instance.config?.featureFlags.professionTargeting ??
-        true;
-    final showProfession = professionFeatureEnabled &&
-        (isViewingOwnProfile || (professionLabel?.isNotEmpty ?? false));
-
-    if (!showProfession) return null;
-
-    final badgeLabel = professionLabel?.isNotEmpty == true
-        ? professionLabel!
-        : AppText.get('profile_add_profession', fallback: '+ Add profession');
-    final label = Text(
-      badgeLabel,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: AppTypography.labelMedium.copyWith(
-        color: AppColors.textPrimary,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-
-    if (!isViewingOwnProfile) {
-      return ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 190),
-        child: label,
-      );
-    }
-
-    return Semantics(
-      button: true,
-      label: badgeLabel,
-      child: TextButton(
-        onPressed: () => _openProfessionPicker(stateManager),
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          minimumSize: const Size(44, 44),
-          maximumSize: const Size(190, 44),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          tapTargetSize: MaterialTapTargetSize.padded,
-        ),
-        child: label,
-      ),
-    );
-  }
-
   SliverAppBar _buildSliverAppBar(
       bool isViewingOwnProfile, ProfileStateManager stateManager) {
     return SliverAppBar(
@@ -1754,6 +1703,150 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       context,
       MaterialPageRoute(
         builder: (context) => const CreatorRevenueScreen(),
+      ),
+    );
+  }
+
+  Future<void> _handleManageVideos(ProfileStateManager stateManager) async {
+    var videos = stateManager.userVideos;
+    if (videos.isEmpty && !stateManager.hasLoadedVideosSuccessfully) {
+      await stateManager.loadUserVideos(widget.userId);
+      videos = stateManager.userVideos;
+    }
+
+    if (!mounted) return;
+
+    if (videos.isEmpty) {
+      VayuSnackBar.showInfo(context, 'No videos to manage');
+      return;
+    }
+
+    if (videos.length == 1) {
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EditVideoDetails(video: videos.first),
+        ),
+      );
+      if (result != null && mounted) {
+        stateManager.updateVideoInList(videos.first.id, result);
+        stateManager.refreshData();
+      }
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        height: MediaQuery.of(sheetContext).size.height * 0.65,
+        decoration: const BoxDecoration(
+          color: AppColors.backgroundPrimary,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textTertiary.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Select Video to Edit',
+                    style: AppTypography.titleLarge.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        color: AppColors.textSecondary),
+                    onPressed: () => Navigator.pop(sheetContext),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: videos.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (ctx, index) {
+                  final video = videos[index];
+                  return ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    leading: Container(
+                      width: 60,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: AppColors.backgroundSecondary,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: video.thumbnailUrl.isNotEmpty
+                            ? Image.network(
+                                video.thumbnailUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.videocam_rounded,
+                                  color: AppColors.textTertiary,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.videocam_rounded,
+                                color: AppColors.textTertiary,
+                              ),
+                      ),
+                    ),
+                    title: Text(
+                      video.videoName,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 14,
+                      color: AppColors.textTertiary,
+                    ),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      if (!mounted) return;
+                      final result =
+                          await Navigator.push<Map<String, dynamic>>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              EditVideoDetails(video: video),
+                        ),
+                      );
+                      if (result != null && mounted) {
+                        stateManager.updateVideoInList(video.id, result);
+                        stateManager.refreshData();
+                      }
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

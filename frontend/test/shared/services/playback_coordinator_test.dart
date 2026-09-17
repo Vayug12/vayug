@@ -152,4 +152,25 @@ void main() {
     coordinator.setActiveTab(3);
     expect(coordinator.canPlay(fullscreen), isTrue);
   });
+
+  test('a surface in PiP stays eligible and active even when the app is backgrounded', () async {
+    coordinator.setActiveTab(0);
+    final feed = registerSurface('yug-feed', tabIndex: 0);
+    await settle();
+    log.clear();
+
+    // Enable PiP on feed session
+    coordinator.setPiPActive(feed, true);
+
+    // App moves to background
+    coordinator.setAppLifecycle(false);
+
+    // Because pipActive is true, feed remains the active surface and canPlay is true
+    expect(coordinator.canPlay(feed), isTrue);
+    expect(coordinator.isActiveSurface(feed), isTrue);
+
+    // Disabling PiP while still in background deactivates it
+    coordinator.setPiPActive(feed, false);
+    expect(coordinator.canPlay(feed), isFalse);
+  });
 }

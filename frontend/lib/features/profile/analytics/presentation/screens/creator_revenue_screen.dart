@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/radius.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -360,14 +361,14 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Core Analytics Grid
+            // Core Analytics 2x3 Grid
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
               crossAxisSpacing: AppSpacing.spacing3,
               mainAxisSpacing: AppSpacing.spacing3,
-              childAspectRatio: 1.5,
+              childAspectRatio: 1.45,
               children: [
                 AnalyticsStatCard(
                   label: "Total Views", 
@@ -386,6 +387,13 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
                   onTap: _showWatchTimeGuide,
                 ),
                 AnalyticsStatCard(
+                  label: "Visit Now Clicks", 
+                  value: _analytics!.core.totalLinkClicks.toString(), 
+                  icon: Icons.ads_click_rounded,
+                  color: Colors.tealAccent,
+                  onTap: _showLinkClicksGuide,
+                ),
+                AnalyticsStatCard(
                   label: "Shares", 
                   icon: Icons.share,
                   color: Colors.blue,
@@ -399,6 +407,13 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
                   color: Colors.redAccent,
                   onTap: _showSkipRateGuide,
                 ),
+                AnalyticsStatCard(
+                  label: "Avg Watch Time", 
+                  value: "${_analytics!.core.avgWatchDuration}s", 
+                  icon: Icons.timelapse_rounded,
+                  color: Colors.purpleAccent,
+                  onTap: _showAvgWatchGuide,
+                ),
               ],
             ),
             
@@ -410,38 +425,102 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
             ),
             
             AppSpacing.vSpace24,
-            TopVideosList(videos: _analytics!.topVideos),
-
-            AppSpacing.vSpace24,
-            Text("Viewer Insights", style: AppTypography.titleMedium),
+            Text("Detailed Breakdown", style: AppTypography.titleMedium),
             AppSpacing.vSpace12,
-            AudienceInsightCard(
-              title: "New vs Returning Viewers", 
-              content: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildMiniStat("New", _analytics!.audience.newVsReturning.newValue.toString()),
-                  _buildMiniStat("Returning", _analytics!.audience.newVsReturning.returning.toString()),
-                ],
-              )
+            _buildSettingRow(
+              icon: Icons.video_library_rounded,
+              title: "Top Performing Videos",
+              subtitle: "Rankings by views & engagement",
+              trailing: Text(
+                _analytics!.topVideos.isEmpty
+                    ? 'None'
+                    : '${_analytics!.topVideos.length} videos',
+                style: TextStyle(
+                  color: _analytics!.topVideos.isEmpty
+                      ? AppColors.textTertiary
+                      : AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              onTap: _showTopVideosSheet,
             ),
-            AppSpacing.vSpace16,
-            AudienceInsightCard(
-              title: "Top States", 
-              content: Column(
-                children: _analytics!.audience.topLocations.map((l) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(l.name, style: AppTypography.bodyMedium),
-                      Text("${l.value}%", style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                )).toList(),
-              )
+            _buildSettingRow(
+              icon: Icons.pie_chart_outline_rounded,
+              title: "Audience Insights",
+              subtitle: "New vs returning & top locations",
+              trailing: Text(
+                '${_analytics!.audience.topLocations.length} states',
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              onTap: _showAudienceInsightsSheet,
             ),
             AppSpacing.vSpace24,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingRow({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: AppColors.backgroundSecondary,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 20, color: AppColors.primary),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              trailing,
+              const SizedBox(width: 8),
+            ],
+            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textTertiary),
           ],
         ),
       ),
@@ -480,6 +559,22 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
     );
   }
 
+  void _showLinkClicksGuide() {
+    _showGenericGuide(
+      title: "Visit Now Clicks Kya Hai?",
+      icon: Icons.ads_click_rounded,
+      content: "Ye pichle 14 dino mein aapke videos par 'Visit Now' button par hue total clicks ka count hai. Isse aap jaan sakte hain ki kitne viewers ne aapki website ya promotional links visit kiye.",
+    );
+  }
+
+  void _showAvgWatchGuide() {
+    _showGenericGuide(
+      title: "Avg Watch Time Kya Hai?",
+      icon: Icons.timelapse_rounded,
+      content: "Ye aapke videos ka average watch duration (seconds mein) hai. Ye dikhata hai ki ek average viewer aapke video ko kitne second tak dekhta hai.",
+    );
+  }
+
   void _showPerformanceGuide() {
     _showGenericGuide(
       title: "Daily Performance Kya Hai?",
@@ -488,63 +583,186 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
       secondaryButton: AppButton(
         onPressed: () {
           Navigator.pop(context);
-          _showDetailedPerformance();
+          _showTopVideosSheet();
         },
-        label: "View Detailed Stats",
+        label: "View Top Videos",
         variant: AppButtonVariant.secondary,
         isFullWidth: true,
       ),
     );
   }
 
-  void _showDetailedPerformance() {
+  void _showTopVideosSheet() {
     if (_analytics == null) return;
     
     VayuBottomSheet.show(
       context: context,
-      title: "Detailed Performance",
-      icon: Icons.insights_rounded,
+      title: "Top Performing Videos",
+      icon: Icons.video_library_rounded,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Top Videos (Last 14 Days)",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          if (_analytics!.topVideos.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Text(
+                  "No videos uploaded in this period",
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                ),
+              ),
+            )
+          else ...[
+            Text(
+              "Ranked by views and engagement over the last 14 days.",
+              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+            ),
+            AppSpacing.vSpace16,
+            ..._analytics!.topVideos.asMap().entries.map((entry) {
+              final index = entry.key;
+              final v = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundSecondary,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: index == 0
+                            ? Colors.amber.withValues(alpha: 0.2)
+                            : (index == 1
+                                ? Colors.grey.withValues(alpha: 0.2)
+                                : (index == 2
+                                    ? Colors.brown.withValues(alpha: 0.2)
+                                    : Colors.white.withValues(alpha: 0.05))),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        "${index + 1}",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: index == 0
+                              ? Colors.amber
+                              : (index == 1
+                                  ? Colors.grey[300]
+                                  : (index == 2 ? Colors.brown[200] : AppColors.textSecondary)),
+                        ),
+                      ),
+                    ),
+                    AppSpacing.hSpace12,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            v.title.isNotEmpty ? v.title : 'Untitled Video',
+                            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "${v.views} views • ${v.shares} shares",
+                            style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.trending_up_rounded, color: AppColors.success, size: 18),
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+          AppSpacing.vSpace16,
+          SizedBox(
+            width: double.infinity,
+            child: AppButton(
+              onPressed: () => Navigator.pop(context),
+              label: "Close",
+            ),
           ),
           AppSpacing.vSpace16,
-          ..._analytics!.topVideos.map((v) => Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(12),
+        ],
+      ),
+    );
+  }
+
+  void _showAudienceInsightsSheet() {
+    if (_analytics == null) return;
+
+    VayuBottomSheet.show(
+      context: context,
+      title: "Audience Insights",
+      icon: Icons.pie_chart_outline_rounded,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Viewer demographics and geographic distribution.",
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+          ),
+          AppSpacing.vSpace16,
+          Container(
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.backgroundSecondary,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.borderPrimary),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(v.title, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      AppSpacing.vSpace4,
-                      Text("${v.views} views • ${v.shares} shares", style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.trending_up, color: AppColors.success, size: 16),
+                Text("New vs Returning Viewers", style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w600)),
+                AppSpacing.vSpace16,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildMiniStat("New", _analytics!.audience.newVsReturning.newValue.toString()),
+                    _buildMiniStat("Returning", _analytics!.audience.newVsReturning.returning.toString()),
+                  ],
                 ),
               ],
             ),
-          )),
-          AppSpacing.vSpace24,
+          ),
+          AppSpacing.vSpace16,
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.backgroundSecondary,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Top States", style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w600)),
+                AppSpacing.vSpace12,
+                ..._analytics!.audience.topLocations.map((l) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(l.name, style: AppTypography.bodyMedium),
+                      Text("${l.value}%", style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                )).toList(),
+              ],
+            ),
+          ),
+          AppSpacing.vSpace16,
           SizedBox(
             width: double.infinity,
             child: AppButton(

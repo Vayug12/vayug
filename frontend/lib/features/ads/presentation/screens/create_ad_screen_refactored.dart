@@ -837,7 +837,7 @@ class _CreateAdScreenRefactoredState
               const SizedBox(height: 24),
               AppButton(
                   onPressed: () => Navigator.pop(context),
-                  label: 'Confirm Details',
+                  label: 'Confirm',
                   variant: AppButtonVariant.primary,
                   isFullWidth: true),
             ],

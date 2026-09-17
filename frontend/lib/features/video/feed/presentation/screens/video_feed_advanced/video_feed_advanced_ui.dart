@@ -1,22 +1,6 @@
 part of '../video_feed_advanced.dart';
 
 extension _VideoFeedUI on _VideoFeedAdvancedState {
-  Widget _buildYugPictureInPicturePlayer() {
-    final controller = _currentPictureInPictureController;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      // Intentionally video-only: feed overlays and settings have no useful
-      // role inside the small system PiP surface.
-      body: controller != null && controller.value.isInitialized
-          ? Center(
-              child: AspectRatio(
-                aspectRatio: _pictureInPictureAspectRatio(controller),
-                child: VideoPlayer(controller),
-              ),
-            )
-          : const ColoredBox(color: Colors.black),
-    );
-  }
 
   double get _primaryActionHitTargetSize {
     const minTouchTarget = AppSpacing.minTouchTarget;
@@ -39,7 +23,6 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
       key: ObjectKey(this),
       onVisibilityChanged: (visibilityInfo) {
         final double visibleFraction = visibilityInfo.visibleFraction;
-        // Determine if screen is truly visible to the user
         final bool isCurrentlyVisible = visibleFraction > 0;
         _handleVisibilityChange(isCurrentlyVisible);
       },
@@ -71,56 +54,6 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                 },
               ),
             ),
-    );
-  }
-
-  Widget _buildErrorState() {
-    final bool isRefreshingOrLoading = _isLoading || _isRefreshing;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 64, color: AppColors.error),
-          AppSpacing.vSpace16,
-          Text(
-            'Failed to load videos',
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: AppTypography.fontSizeXL,
-              fontWeight: AppTypography.weightBold,
-            ),
-          ),
-          if (_errorMessage != null) ...[
-            AppSpacing.vSpace8,
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                _getUserFriendlyErrorMessage(_errorMessage!),
-                style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: AppTypography.fontSizeBase),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-          AppSpacing.vSpace24,
-          AppButton(
-            onPressed: refreshVideos,
-            icon: isRefreshingOrLoading ? null : const Icon(Icons.refresh),
-            label: 'Retry',
-            variant: AppButtonVariant.primary,
-            isLoading: isRefreshingOrLoading,
-          ),
-          AppSpacing.vSpace12,
-          AppButton(
-            onPressed: _testApiConnection,
-            icon: const Icon(Icons.wifi_find),
-            label: 'Test Connection',
-            variant: AppButtonVariant.secondary,
-            isDisabled: isRefreshingOrLoading,
-          ),
-        ],
-      ),
     );
   }
 
@@ -569,51 +502,6 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.video_library_outlined,
-            size: 64,
-            color: AppColors.textSecondary,
-          ),
-          AppSpacing.vSpace16,
-          Text(
-            'No videos available',
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: AppTypography.fontSizeXL,
-              fontWeight: AppTypography.weightBold,
-            ),
-          ),
-          AppSpacing.vSpace24,
-          AppButton(
-            onPressed: refreshVideos,
-            icon: const Icon(Icons.refresh),
-            label: 'Refresh',
-            variant: AppButtonVariant.primary,
-          ),
-          // **NEW: Add debug info button for troubleshooting**
-          if (_errorMessage != null && _errorMessage!.isNotEmpty) ...[
-            AppSpacing.vSpace12,
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                'Error: ${_errorMessage!.length > 100 ? "${_errorMessage!.substring(0, 100)}..." : _errorMessage!}',
-                style: TextStyle(
-                  color: AppColors.error,
-                  fontSize: AppTypography.fontSizeSM,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   int _getTotalItemCount() {
     if (_openedFromProfile) {
@@ -1667,7 +1555,6 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
 
   Widget _buildVideoOverlay(
       VideoModel video, int index, VideoPlayerController? controller) {
-    final sharedPool = SharedVideoControllerPool();
     // **REELS/SHORTS STYLE: Position at absolute bottom with zero spacing**
     return Builder(
       builder: (context) {
@@ -1917,7 +1804,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
 
         // **VISIT NOW PROTECTION: Show button when position >= showAtSeconds**
         final int linkShowAtSeconds = video.validLinks.isNotEmpty
-            ? video.validLinks.first.showAtSeconds
+            ? video.validLinks.map((l) => l.showAtSeconds).reduce((a, b) => a < b ? a : b)
             : 0;
 
         final visitNowButton = video.hasLink
@@ -2902,7 +2789,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
                                 valueListenable: widget.controller,
                                 builder: (context, val, _) {
                                   final int minShow = widget.video.validLinks.isNotEmpty
-                                      ? widget.video.validLinks.first.showAtSeconds
+                                      ? widget.video.validLinks.map((l) => l.showAtSeconds).reduce((a, b) => a < b ? a : b)
                                       : 0;
                                   if (val.position.inSeconds < minShow) {
                                     return const SizedBox.shrink();

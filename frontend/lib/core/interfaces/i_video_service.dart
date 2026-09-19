@@ -14,6 +14,8 @@ abstract class IVideoService {
 
   Future<bool> deleteVideo(String videoId);
 
+  Future<bool> cancelVideoUpload(String videoId);
+
   Future<Map<String, dynamic>?> getVideoProcessingStatus(String videoId);
 
   Future<Map<String, dynamic>> uploadVideo({

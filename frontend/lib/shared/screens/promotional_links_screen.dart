@@ -874,8 +874,7 @@ class _PromotionalLinkEditorScreenState extends State<PromotionalLinkEditorScree
                           Text(
                             clampedSeconds == 0
                                 ? 'From start (0s)'
-                                : 'Appears after ${clampedSeconds}s' +
-                                    (widget.videoDuration > 0 ? ' (Video: ${maxSec}s)' : ''),
+                                : 'Appears after ${clampedSeconds}s${widget.videoDuration > 0 ? ' (Video: ${maxSec}s)' : ''}',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                           Text(

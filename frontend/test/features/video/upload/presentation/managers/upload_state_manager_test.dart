@@ -13,6 +13,7 @@ class _ControlledUploadService implements IVideoUploadService {
   final StreamController<double> _progress =
       StreamController<double>.broadcast();
   final Completer<String?> uploadCompleter = Completer<String?>();
+  final Completer<void> uploadStarted = Completer<void>();
   bool wasCancelled = false;
   Map<String, dynamic>? lastMetadata;
 
@@ -34,6 +35,9 @@ class _ControlledUploadService implements IVideoUploadService {
     Map<String, dynamic>? metadata,
   }) {
     lastMetadata = metadata;
+    if (!uploadStarted.isCompleted) {
+      uploadStarted.complete();
+    }
     return uploadCompleter.future;
   }
 
@@ -54,7 +58,7 @@ void main() {
 
     manager.setVideo(firstVideo);
     final firstUpload = manager.startUpload(title: 'First', description: '');
-    await Future<void>.delayed(Duration.zero);
+    await uploadService.uploadStarted.future;
 
     manager.cancelUpload();
     manager.setVideo(secondVideo);
@@ -100,7 +104,7 @@ void main() {
       description: '',
       targetProfessionIds: const ['software_engineer', 'web_developer'],
     );
-    await Future<void>.delayed(Duration.zero);
+    await uploadService.uploadStarted.future;
 
     expect(
       uploadService.lastMetadata?['targetProfessionIds'],
@@ -110,5 +114,38 @@ void main() {
     manager.cancelUpload();
     uploadService.uploadCompleter.complete(null);
     await upload;
+  });
+
+  test('cancelling in-flight processing notifies server via cancelVideoUpload',
+      () async {
+    final uploadService = _ControlledUploadService();
+    final mockVideoService = _MockVideoService();
+    when(() => mockVideoService.cancelVideoUpload(any()))
+        .thenAnswer((_) async => true);
+    when(() => mockVideoService.getVideoProcessingStatus(any()))
+        .thenAnswer((_) async => {'video': {'processingStatus': 'processing'}});
+
+    final manager = UploadStateManager(
+      uploadService: uploadService,
+      videoService: mockVideoService,
+    );
+    manager.setVideo(File('video.mp4'));
+
+    final upload = manager.startUpload(title: 'Testing Cancel', description: '');
+    await uploadService.uploadStarted.future;
+
+    // Complete upload step to simulate reaching processing phase
+    uploadService.uploadCompleter.complete('test_video_999');
+    await pumpEventQueue();
+
+    expect(manager.uploadedVideoIds, contains('test_video_999'));
+
+    // Cancel while processing
+    manager.cancelUpload();
+    await upload;
+
+    verify(() => mockVideoService.cancelVideoUpload('test_video_999')).called(1);
+    expect(manager.status, UploadStatus.idle);
+    expect(manager.uploadedVideoIds, isEmpty);
   });
 }

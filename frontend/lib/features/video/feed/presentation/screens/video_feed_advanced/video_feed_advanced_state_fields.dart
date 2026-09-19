@@ -199,6 +199,8 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
   // **NEW: Video Error Tracking**
   // Stores error messages for videos that failed to load or play
   final Map<String, String> _videoErrors = {};
+  // Track self-heal retries per video to prevent infinite blinking loops
+  final Map<String, int> _selfHealRetryCount = {};
 
   /// Tracks videos currently in E2EE prebuffer phase —
   /// key is registered, prefetch is running, waiting for enough bytes on disk

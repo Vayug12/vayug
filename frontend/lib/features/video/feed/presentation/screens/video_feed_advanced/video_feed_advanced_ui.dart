@@ -249,6 +249,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                   _videoErrors.remove(videoId);
                   _e2eeDecryptingVideos.remove(videoId);
                   _preloadRetryCount.remove(videoId);
+                  _selfHealRetryCount.remove(videoId);
                   _loadingVideos.add(videoId); // Show spinner
                   _isBuffering[videoId] = false; // Reset buffering state
                   _isBufferingVN[videoId]?.value = false;
@@ -730,9 +731,9 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
         controllerUsable &&
         controller != null &&
         !controller.value.hasError) {
-      // If controller is playing or has buffered content, it's likely a stale error
+      // If controller is actually playing, it's a stale error
       // (e.g. transient network error during load, but retry succeeded)
-      if (controller.value.isPlaying || controller.value.buffered.isNotEmpty) {
+      if (controller.value.isPlaying) {
         // It's working! Ignore the error and schedule cleanup
         showError = false;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1046,7 +1047,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 0,
+                    bottom: MediaQuery.of(context).padding.bottom,
                     child: _buildVideoProgressBar(controller),
                   ),
                 if (_showHeartAnimation[videoId]?.value == true)

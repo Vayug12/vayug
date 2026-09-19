@@ -9,8 +9,8 @@ enum VideoOrientationChoice {
 
 /// **VideoOrientationDialog**
 ///
-/// Prompts the creator to choose between Yug (vertical) and Vayu (landscape).
-/// Features a minimal horizontal icon layout with "Yug" and "Vayu" labels.
+/// Prompts the creator to choose between Vertical and Horizontal orientation.
+/// Features a minimal horizontal icon layout with "Vertical" and "Horizontal" labels.
 class VideoOrientationDialog extends StatelessWidget {
   final double detectedAspectRatio;
 
@@ -51,7 +51,7 @@ class VideoOrientationDialog extends StatelessWidget {
                 context: context,
                 choice: VideoOrientationChoice.vertical,
                 icon: Icons.stay_current_portrait_rounded,
-                label: 'Yug',
+                label: 'Vertical',
                 isDetected: !isDetectedLandscape,
               ),
             ),
@@ -61,7 +61,7 @@ class VideoOrientationDialog extends StatelessWidget {
                 context: context,
                 choice: VideoOrientationChoice.landscape,
                 icon: Icons.stay_current_landscape_rounded,
-                label: 'Vayu',
+                label: 'Horizontal',
                 isDetected: isDetectedLandscape,
               ),
             ),

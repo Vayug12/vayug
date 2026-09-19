@@ -73,8 +73,17 @@ extension _VideoFeedRecovery on _VideoFeedAdvancedState {
     final video = _videos[index];
     final videoId = video.id;
 
+    // Guard against infinite self-heal loops (e.g. playback/codec error)
+    final retries = _selfHealRetryCount[videoId] ?? 0;
+    if (retries >= 2) {
+      AppLogger.log(
+          '⚠️ SELF-HEAL: Reached maximum attempts (2) for $videoId at index $index. Halting retry to prevent screen blinking.');
+      return;
+    }
+    _selfHealRetryCount[videoId] = retries + 1;
+
     AppLogger.log(
-        '🩹 SELF-HEAL: Detected disposed controller for $videoId at index $index. Re-initializing...');
+        '🩹 SELF-HEAL: Detected disposed controller for $videoId at index $index (attempt ${retries + 1}/2). Re-initializing...');
 
     _controllerPool.remove(videoId);
     _controllerStates.remove(videoId);

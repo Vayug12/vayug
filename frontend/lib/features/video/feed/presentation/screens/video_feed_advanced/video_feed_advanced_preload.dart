@@ -594,6 +594,7 @@ extension _VideoFeedPreload on _VideoFeedAdvancedState {
           _lastAccessedLocal[videoId] = DateTime.now();
           // Clear retry count on successful preload
           _preloadRetryCount.remove(videoId);
+          _selfHealRetryCount.remove(videoId);
           // **FIX: Remove E2EE decrypting state ONLY after controller is fully initialized.
           // This keeps the progress bar visible throughout download + init, preventing
           // premature "Source error" when ExoPlayer reads beyond prebuffered bytes.**
@@ -884,6 +885,7 @@ extension _VideoFeedPreload on _VideoFeedAdvancedState {
       _lastAccessedLocal.remove(videoId);
       _initializingVideos.remove(videoId);
       _preloadRetryCount.remove(videoId);
+      _selfHealRetryCount.remove(videoId);
       _videoErrors.remove(videoId);
         
       if (_errorListeners.containsKey(videoId)) {

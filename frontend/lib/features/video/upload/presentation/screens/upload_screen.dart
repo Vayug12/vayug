@@ -130,6 +130,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   }
 
   void _deselectVideo() {
+    if (ref.read(uploadStateManagerProvider).isUploadInFlight) {
+      _confirmCancelUpload();
+      return;
+    }
     _resetScreenState();
   }
 
@@ -194,6 +198,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         if (mounted) _showLoginPrompt();
         return;
       }
+      if (!mounted) return;
 
       // Mandatory UPI verification before uploading paid videos
       final hasUpi = await UpiSetupDialog.ensureUpiAvailable(context);
@@ -372,20 +377,29 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   Future<void> _confirmCancelUpload() async {
     final manager = ref.read(uploadStateManagerProvider);
-    if (manager.status == UploadStatus.processing ||
-        manager.currentPhase == 'processing') {
-      return;
-    }
+    final isProcessing = manager.status == UploadStatus.processing ||
+        manager.currentPhase == 'processing';
     final uploaded = manager.episodesUploaded;
+
+    String contentText;
+    if (isProcessing) {
+      contentText =
+          'The video is currently being processed on the server. Cancelling will stop processing and delete the video.';
+    } else if (manager.isSeries && uploaded > 0) {
+      contentText =
+          '$uploaded of ${manager.totalEpisodes} episodes have already uploaded and will stay published. The rest will not be sent.';
+    } else {
+      contentText =
+          'The video will not be uploaded and you will have to start over.';
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.backgroundSecondary,
         title: const Text('Cancel this upload?'),
         content: Text(
-          manager.isSeries && uploaded > 0
-              ? '$uploaded of ${manager.totalEpisodes} episodes have already uploaded and will stay published. The rest will not be sent.'
-              : 'The video will not be uploaded and you will have to start over.',
+          contentText,
           style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
         ),
         actions: [
@@ -995,9 +1009,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     }
 
     if (state.isUploadInFlight) {
-      final isProcessing = state.status == UploadStatus.processing ||
-          state.currentPhase == 'processing';
-
       return Column(
         children: [
           // Leaving is the recommended path — waiting on this screen buys the
@@ -1008,15 +1019,13 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             variant: AppButtonVariant.primary,
             isFullWidth: true,
           ),
-          if (!isProcessing) ...[
-            AppSpacing.vSpace12,
-            AppButton(
-              onPressed: _confirmCancelUpload,
-              label: 'Cancel Upload',
-              variant: AppButtonVariant.outline,
-              isFullWidth: true,
-            ),
-          ],
+          AppSpacing.vSpace12,
+          AppButton(
+            onPressed: _confirmCancelUpload,
+            label: 'Cancel Upload',
+            variant: AppButtonVariant.outline,
+            isFullWidth: true,
+          ),
         ],
       );
     }

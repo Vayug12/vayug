@@ -327,6 +327,14 @@ class VideoCleanupService {
       console.warn('⚠️ Queue job cleanup failed:', queueErr.message);
     }
 
+    // 3.5 Release daily upload quota if reserved
+    try {
+      const { releaseUploadSlotForVideo } = await import('./dailyUploadQuotaService.js');
+      await releaseUploadSlotForVideo(video);
+    } catch (quotaErr) {
+      // Non-fatal if video had no quota slot reserved
+    }
+
     // 4. Delete the video document itself from MongoDB
     await Video.findByIdAndDelete(video._id);
 

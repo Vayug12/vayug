@@ -222,10 +222,32 @@ class FeedQueueService {
     async removeVideoJob(videoId) {
         try {
             console.log(`🧹 QueueService: Attempting to remove jobs for video ${videoId} from queue...`);
+
+            // Set Redis cancellation flag so active workers immediately abort
+            let isRedisUp = false;
+            try {
+                const { default: redisService } = await import('../caching/redisService.js');
+                isRedisUp = redisService.getConnectionStatus && redisService.getConnectionStatus();
+                if (isRedisUp) {
+                    await redisService.set(`video:cancelled:${videoId}`, 'true', 3600);
+                    console.log(`   Set Redis cancellation flag for video ${videoId}`);
+                }
+            } catch (redisErr) {
+                console.warn(`⚠️ QueueService: Failed to set Redis cancellation flag:`, redisErr.message);
+            }
+
+            if (!isRedisUp && process.env.NODE_ENV === 'test') {
+                console.log(`🧹 QueueService: Redis not connected in test mode, skipping queue removal.`);
+                return true;
+            }
+
             const jobTypes = [`process-video_${videoId}`];
             for (const jobId of jobTypes) {
                 try {
-                    const job = await videoQueue.getJob(jobId);
+                    const job = await Promise.race([
+                        videoQueue.getJob(jobId),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('getJob timeout')), 2000))
+                    ]);
                     if (job) {
                         const state = await job.getState();
                         console.log(`   Found job ${jobId} in state: ${state}. Removing...`);

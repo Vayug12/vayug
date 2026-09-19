@@ -25,9 +25,12 @@ class VideoAspectSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     // **REACTIVE RECOVERY: Atomic validity check**
     final sharedPool = SharedVideoControllerPool();
+    final bool hasPlaybackError =
+        sharedPool.safeValue(controller)?.hasError ?? false;
+
     if (!sharedPool.isControllerValid(controller)) {
-      // Trigger recovery on next frame
-      if (onControllerInvalid != null) {
+      // Trigger recovery on next frame ONLY if controller is stale/disposed, NOT on a playback error
+      if (onControllerInvalid != null && !hasPlaybackError) {
         Future.microtask(() => onControllerInvalid!());
       }
       return const Center(
@@ -100,8 +103,8 @@ class VideoAspectSurface extends StatelessWidget {
           }
         } catch (e) {
           AppLogger.log('⚠️ VideoAspectSurface: Caught disposal race condition: $e');
-          // Trigger recovery on next frame
-          if (onControllerInvalid != null) {
+          // Trigger recovery on next frame ONLY if not a playback error
+          if (onControllerInvalid != null && !hasPlaybackError) {
             Future.microtask(() => onControllerInvalid!());
           }
           return const Center(

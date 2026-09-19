@@ -56,6 +56,7 @@ export default class MongoSearchProvider extends ISearchProvider {
             }
           }
         },
+        { $match: { processingStatus: 'completed' } },
         { $limit: limit },
         {
           $addFields: { searchType: 'text', searchScore: { $meta: 'searchScore' } }
@@ -75,7 +76,8 @@ export default class MongoSearchProvider extends ISearchProvider {
       
       // Fallback to basic case-insensitive regex search
       const fallback = await Video.find({
-        videoName: { $regex: q, $options: 'i' }
+        videoName: { $regex: q, $options: 'i' },
+        processingStatus: 'completed'
       })
       .limit(limit)
       .populate('uploader', 'googleId name profilePic')

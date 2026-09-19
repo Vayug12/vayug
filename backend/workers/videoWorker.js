@@ -42,9 +42,9 @@ async function handleVideoProcessing(job) {
   
   try {
     const videoExists = await Video.findById(videoId);
-    if (!videoExists) {
-      console.warn(`⚠️ Worker: Video ${videoId} has been deleted before processing. Skipping.`);
-      return { status: 'skipped', reason: 'video_deleted' };
+    if (!videoExists || videoExists.processingStatus === 'cancelled') {
+      console.warn(`⚠️ Worker: Video ${videoId} has been cancelled or deleted before processing. Skipping.`);
+      return { status: 'skipped', reason: 'video_cancelled' };
     }
 
     console.log(`👷 Worker: Dispatching video ${videoId} to pipeline...`);
@@ -63,6 +63,13 @@ async function handleVideoProcessing(job) {
       thumbnailKey,
       crossPostPlatforms
     });
+
+    // Check if video was cancelled during pipeline execution
+    const currentVideo = await Video.findById(videoId);
+    if (!currentVideo || currentVideo.processingStatus === 'cancelled') {
+      console.warn(`🛑 Worker: Video ${videoId} was cancelled during pipeline execution. Skipping completion.`);
+      return { status: 'cancelled', videoId };
+    }
 
     // Final status update (already handled by pipeline steps, but ensures completion)
     await Video.findByIdAndUpdate(videoId, { 
@@ -115,10 +122,18 @@ async function handleVideoProcessing(job) {
     return { status: 'completed', videoId, result };
 
   } catch (error) {
+    const isCancelledError = error.message === 'VIDEO_PROCESSING_CANCELLED';
+    const videoExists = await Video.findById(videoId);
+    const isCancelled = isCancelledError || (videoExists && videoExists.processingStatus === 'cancelled');
+
+    if (isCancelled) {
+      console.warn(`🛑 Worker: Processing for ${videoId} was cancelled by user. Suppressing failure updates and notifications.`);
+      return { status: 'cancelled', videoId };
+    }
+
     console.error(`❌ Worker Error for ${videoId}:`, error);
     
     // Only attempt database updates if the video still exists
-    const videoExists = await Video.findById(videoId);
     if (videoExists) {
       await markVideoUploadFailed(videoId, error);
 

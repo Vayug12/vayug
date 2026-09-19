@@ -348,6 +348,7 @@ class HybridVideoService {
           copyVideo: isPreOptimized,
           copyAudio: false,
           originalVideoInfo: originalVideoInfo,
+          checkCancelled: options.checkCancelled,
           onProgress: (percent) => {
             // Map 0-100% of encoding to 20-80% of total progress
             const mappedPercent = 20 + Math.round(percent * 0.6);

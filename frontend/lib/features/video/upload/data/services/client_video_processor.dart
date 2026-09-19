@@ -41,12 +41,27 @@ class ClientVideoMeta {
   });
 }
 
-/// Robust on-device video processor targeting 480p H.265 (HEVC).
+/// Robust on-device video processor targeting 480p H.264 (AVC).
 ///
 /// Designed with graceful fallback: if compression fails for any reason
 /// (timeout, low memory, unsupported format), it returns the original file
 /// so that the server worker can transcode it without user disruption.
 class ClientVideoProcessor {
+  static Session? _activeSession;
+
+  /// Cancels any in-flight on-device FFmpeg compression session.
+  static void cancel() {
+    try {
+      if (_activeSession != null) {
+        AppLogger.log('🛑 ClientVideoProcessor: Cancelling active FFmpeg session...');
+        FFmpegKit.cancel(_activeSession!.getSessionId());
+        _activeSession = null;
+      }
+    } catch (e) {
+      AppLogger.log('⚠️ ClientVideoProcessor: Error cancelling session: $e');
+    }
+  }
+
   /// Probes video metadata using FFprobeKit
   static Future<ClientVideoMeta?> probeVideo(String filePath) async {
     try {
@@ -104,17 +119,15 @@ class ClientVideoProcessor {
     }
   }
 
-  /// Evaluates whether the video is already pre-optimized for 480p H.265/H.264
+  /// Evaluates whether the video is already pre-optimized for 480p H.264
   static bool shouldCompress(ClientVideoMeta? meta, int fileSizeInBytes) {
     if (meta == null) return true;
 
     // Check if dimensions are already within 480p boundary
     final isAlready480p = meta.isPortrait ? (meta.width <= 480) : (meta.height <= 480);
 
-    // Check if codec is modern web-streamable
+    // Check if codec is modern web-streamable H.264
     final isCompatibleCodec =
-        meta.codec.contains('hevc') ||
-        meta.codec.contains('h265') ||
         meta.codec.contains('h264') ||
         meta.codec.contains('avc');
 
@@ -177,17 +190,17 @@ class ClientVideoProcessor {
           ? "scale='min(480,iw)':-2"
           : "scale=-2:'min(480,ih)'";
 
-      // 480p H.265 (HEVC) sweet spot: veryfast preset, CRF 23, 1000k bitrate, 2-sec GOP for instant zero-buffer streaming
+      // 480p H.264 (AVC) sweet spot: veryfast preset, CRF 21, 1500k bitrate, 2-sec GOP for instant zero-buffer streaming
       final cmd = '-y -i "${originalVideo.path}" '
           '-vf "$scaleFilter" '
-          '-c:v libx265 -tag:v hvc1 -preset veryfast -crf 23 -pix_fmt yuv420p -threads 3 '
-          '-maxrate 1000k -bufsize 1500k '
-          '-x265-params keyint=60:min-keyint=30:scenecut=40 '
+          '-c:v libx264 -preset veryfast -profile:v main -level 3.1 -crf 21 -pix_fmt yuv420p -threads 3 '
+          '-maxrate 1500k -bufsize 2500k '
+          '-g 60 -keyint_min 30 -sc_threshold 40 '
           '-c:a aac -b:a 80k -ar 44100 '
           '-movflags +faststart '
           '"$outputPath"';
 
-      AppLogger.log('🎬 ClientVideoProcessor: Starting 480p H.265 encoding...');
+      AppLogger.log('🎬 ClientVideoProcessor: Starting 480p H.264 encoding...');
       onStarted?.call();
       final duration = (meta?.duration != null && meta!.duration > 0)
           ? meta.duration
@@ -211,6 +224,7 @@ class ClientVideoProcessor {
       );
 
       activeSession = session;
+      _activeSession = session;
 
       // Timeout watchdog: allow up to 180 seconds for client compression
       final timeoutDuration = Duration(
@@ -229,7 +243,7 @@ class ClientVideoProcessor {
         if (compressedSize > 10000) {
           final savingsPct = ((originalSize - compressedSize) / originalSize * 100).toInt();
           AppLogger.log(
-            '✅ ClientVideoProcessor: 480p H.265 encode complete. '
+            '✅ ClientVideoProcessor: 480p H.264 encode complete. '
             'Original: ${(originalSize / (1024 * 1024)).toStringAsFixed(1)}MB -> '
             'Compressed: ${(compressedSize / (1024 * 1024)).toStringAsFixed(1)}MB ($savingsPct% savings)',
           );
@@ -276,6 +290,9 @@ class ClientVideoProcessor {
         message: e.toString(),
       );
     } finally {
+      if (_activeSession == activeSession) {
+        _activeSession = null;
+      }
       try {
         await WakelockPlus.disable();
       } catch (_) {}

@@ -21,6 +21,12 @@ class HlsTranscodeStep extends IBaseStep {
       userId,
       {
         videoId: videoId,
+        checkCancelled: async () => {
+          if (context.pipeline) {
+            return await context.pipeline.isCancelled(videoId);
+          }
+          return false;
+        },
         onProgress: (percent) => {
           context.progress = percent;
           
@@ -35,8 +41,19 @@ class HlsTranscodeStep extends IBaseStep {
       }
     );
 
+    // If cancelled during transcoding, abort immediately
+    if (context.pipeline && await context.pipeline.isCancelled(videoId)) {
+      throw new Error('VIDEO_PROCESSING_CANCELLED');
+    }
+
     // Save results to context for later steps
     context.hlsResult = hlsResult;
+
+    // Check video document still exists and is not cancelled before marking completed
+    const currentVideo = await Video.findById(videoId).select('processingStatus');
+    if (!currentVideo || currentVideo.processingStatus === 'cancelled') {
+      throw new Error('VIDEO_PROCESSING_CANCELLED');
+    }
 
     // Update video record (Partial)
     await Video.findByIdAndUpdate(videoId, {

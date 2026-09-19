@@ -239,6 +239,15 @@ class HLSEncodingService {
           );
         }
 
+        if (options.checkCancelled) {
+          options.checkCancelled().then(cancelled => {
+            if (cancelled) {
+              console.warn(`🛑 [HLS] ${videoId} | Cancelled by user. Terminating FFmpeg process.`);
+              try { command.kill('SIGKILL'); } catch (_) {}
+            }
+          }).catch(() => {});
+        }
+
         if (onProgress) onProgress(percent);
       });
 

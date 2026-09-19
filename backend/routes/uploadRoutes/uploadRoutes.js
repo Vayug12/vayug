@@ -495,7 +495,7 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
         thumbnailKey: thumbnailKey
       });
     } else if (isClientOptimizedBool) {
-      console.log(`⚡ Video ${newVideo._id} is client-optimized (480p H.265). Bypassed Fly worker queue and published immediately.`);
+      console.log(`⚡ Video ${newVideo._id} is client-optimized (480p H.264). Bypassed Fly worker queue and published immediately.`);
     } else {
       console.log(`🔒 Video ${newVideo._id} is subscriber-only/E2EE. Bypassing processing queue and publishing immediately.`);
     }
@@ -870,6 +870,71 @@ router.post('/video/:videoId/retry', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retry video processing',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @route POST /api/upload/video/:videoId/cancel
+ * @desc Cancel in-flight video upload/processing and purge associated assets
+ * @access Private
+ */
+router.post('/video/:videoId/cancel', verifyToken, async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const userId = req.user.id;
+
+    if (!videoId || !mongoose.Types.ObjectId.isValid(videoId)) {
+      return res.status(400).json({ success: false, error: 'Valid videoId is required' });
+    }
+
+    const video = await Video.findById(videoId).populate('uploader', '_id googleId');
+    if (!video) {
+      return res.status(200).json({ success: true, message: 'Video already cancelled or not found' });
+    }
+
+    // Verify ownership
+    const owner = await User.findOne({ googleId: userId });
+    const isOwner = (owner && video.uploader?._id?.toString() === owner._id.toString()) ||
+                    (video.uploader?.googleId === userId) ||
+                    (video.uploader?.toString() === userId);
+
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: 'Access denied: You do not own this video' });
+    }
+
+    console.log(`🛑 Cancelling upload/processing for video: ${videoId}`);
+
+    // 1. Set cancellation flag in Redis so active worker/pipeline aborts immediately
+    if (redisService.getConnectionStatus && redisService.getConnectionStatus()) {
+      await redisService.set(`video:cancelled:${videoId}`, 'true', 3600);
+    }
+
+    // 2. Mark video status as cancelled
+    await Video.findByIdAndUpdate(videoId, {
+      processingStatus: 'cancelled',
+      processingError: 'Upload cancelled by user'
+    });
+
+    // 3. Remove queue jobs
+    await queueService.removeVideoJob(videoId);
+
+    // 4. Perform complete asset and DB cleanup
+    const videoCleanupService = (await import('../../services/uploadServices/videoCleanupService.js')).default;
+    await videoCleanupService.deleteVideoCompletely(video, {
+      googleId: owner?.googleId || userId
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Video upload and processing cancelled successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error cancelling video upload:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to cancel video upload',
       details: error.message
     });
   }

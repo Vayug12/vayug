@@ -207,6 +207,7 @@ class UploadStateManager extends ChangeNotifier {
   /// Ids of everything already accepted by the server, kept across a retry so
   /// the processing watch covers the whole series and not just the resumed tail.
   final List<String> _uploadedVideoIds = [];
+  List<String> get uploadedVideoIds => List.unmodifiable(_uploadedVideoIds);
 
   int _episodesReady = 0;
 
@@ -467,7 +468,12 @@ class UploadStateManager extends ChangeNotifier {
         ),
       );
 
-      if (!_isCurrentOperation(operationId)) return;
+      if (!_isCurrentOperation(operationId)) {
+        if (videoId != null) {
+          _videoService.cancelVideoUpload(videoId).catchError((_) => false);
+        }
+        return;
+      }
 
       if (videoId != null) {
         // 5. Wait for Processing / Publish
@@ -640,7 +646,12 @@ class UploadStateManager extends ChangeNotifier {
           _cleanupTempFile(episodeThumbnail);
         }
 
-        if (!_isCurrentOperation(operationId)) return;
+        if (!_isCurrentOperation(operationId)) {
+          if (videoId != null) {
+            _videoService.cancelVideoUpload(videoId).catchError((_) => false);
+          }
+          return;
+        }
 
         if (videoId == null) {
           _setError(
@@ -853,7 +864,16 @@ class UploadStateManager extends ChangeNotifier {
 
   void _invalidateActiveUpload() {
     _uploadOperationId++;
+    ClientVideoProcessor.cancel();
     _uploadService.cancelUpload();
+
+    // If any videos were created on the server, only cancel/purge them if the upload was cancelled or failed (not if it succeeded)
+    if (_status != UploadStatus.success && _uploadedVideoIds.isNotEmpty) {
+      final idsToCancel = List<String>.from(_uploadedVideoIds);
+      for (final id in idsToCancel) {
+        _videoService.cancelVideoUpload(id).catchError((_) => false);
+      }
+    }
   }
 
   void _clearState() {

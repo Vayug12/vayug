@@ -883,6 +883,13 @@ class VideoService implements IVideoService {
       // **FIX: Use shared httpClientService.dioClient to ensure interceptors and validateStatus work**
       final dio = httpClientService.dioClient;
 
+      if (cancelToken?.isCancelled == true) {
+        throw DioException(
+          requestOptions: RequestOptions(path: '$baseUrl/api/upload/video/presigned'),
+          type: DioExceptionType.cancel,
+        );
+      }
+
       final presignedResponse = await dio.post(
         '$baseUrl/api/upload/video/presigned',
         data: {
@@ -895,6 +902,7 @@ class VideoService implements IVideoService {
             'Content-Type': 'application/json',
           },
         ),
+        cancelToken: cancelToken,
       );
 
       final uploadUrl = presignedResponse.data['uploadUrl'];
@@ -931,6 +939,13 @@ class VideoService implements IVideoService {
         },
       );
 
+      if (cancelToken?.isCancelled == true) {
+        throw DioException(
+          requestOptions: RequestOptions(path: uploadUrl),
+          type: DioExceptionType.cancel,
+        );
+      }
+
       if (onProgress != null) onProgress(0.98); // Almost done
 
       // 3. Handle Thumbnail Upload if provided
@@ -945,6 +960,7 @@ class VideoService implements IVideoService {
             'fileType': thumbMimeType,
             'fileSize': await thumbnailFile.length(),
           },
+          cancelToken: cancelToken,
         );
         
         final thumbUploadUrl = thumbPresignedResponse.data['uploadUrl'];
@@ -961,9 +977,17 @@ class VideoService implements IVideoService {
                 'Cache-Control': 'public, max-age=31536000, immutable, stale-while-revalidate=604800',
               },
             ),
+            cancelToken: cancelToken,
           );
           AppLogger.log('✅ Custom thumbnail uploaded successfully');
         }
+      }
+
+      if (cancelToken?.isCancelled == true) {
+        throw DioException(
+          requestOptions: RequestOptions(path: '$baseUrl/api/upload/video/direct-complete'),
+          type: DioExceptionType.cancel,
+        );
       }
 
       // 4. Notify Backend to Start Processing
@@ -989,6 +1013,7 @@ class VideoService implements IVideoService {
           'paidAccess': paidAccess,
           'isClientOptimized': isClientOptimized ?? false,
         },
+        cancelToken: cancelToken,
       );
 
       // **NEW: Key Distribution (if E2EE)**
@@ -1254,6 +1279,32 @@ class VideoService implements IVideoService {
         throw Exception('Request timed out. Please try again.');
       }
       rethrow;
+    }
+  }
+
+  /// **Cancel in-flight video upload and processing on backend**
+  @override
+  Future<bool> cancelVideoUpload(String videoId) async {
+    try {
+      AppLogger.log('🛑 VideoService: Cancelling upload/processing for video: $videoId');
+      final resolvedBaseUrl = await getBaseUrlWithFallback();
+      final res = await httpClientService.post(
+        Uri.parse('$resolvedBaseUrl/api/upload/video/$videoId/cancel'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({}),
+        timeout: const Duration(seconds: 10),
+      );
+
+      if (res.statusCode == 200) {
+        AppLogger.log('✅ VideoService: Video processing cancelled successfully on server: $videoId');
+        return true;
+      } else {
+        AppLogger.log('⚠️ VideoService: Cancel response status ${res.statusCode}: ${res.body}');
+        return false;
+      }
+    } catch (e) {
+      AppLogger.log('⚠️ VideoService: Failed to send cancellation to server for $videoId: $e');
+      return false;
     }
   }
 

@@ -54,7 +54,15 @@ import 'package:vayug/core/providers/navigation_providers.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   final String? userId;
-  const ProfileScreen({super.key, this.userId});
+  final VoidCallback? onBackPressed;
+  final bool isEmbeddedInFeed;
+
+  const ProfileScreen({
+    super.key,
+    this.userId,
+    this.onBackPressed,
+    this.isEmbeddedInFeed = false,
+  });
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -1235,7 +1243,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 notificationPredicate: (notification) =>
                     notification.depth >= 0,
                 child: TabBarView(
-                  physics: const BouncingScrollPhysics(),
+                  physics: widget.isEmbeddedInFeed
+                      ? const NeverScrollableScrollPhysics()
+                      : const BouncingScrollPhysics(),
                   dragStartBehavior: DragStartBehavior.down,
                   controller: _tabController,
                   children: [
@@ -1566,7 +1576,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   size: 20),
               tooltip: 'Back',
               onPressed: () {
-                Navigator.of(context).pop();
+                if (widget.onBackPressed != null) {
+                  widget.onBackPressed!();
+                } else {
+                  Navigator.of(context).pop();
+                }
               },
             ),
       actions: _buildAppBarActions(stateManager, isViewingOwnProfile),
@@ -1616,7 +1630,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (isViewingOwnProfile) {
       return [
         TextButton(
-          onPressed: _showFAQDialog,
+          onPressed: _showMonetizeDialog,
           style: TextButton.styleFrom(
             foregroundColor: AppColors.primary,
             minimumSize: const Size(56, 44),
@@ -1674,9 +1688,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  /// Show Monetization guide/video sheet without FAQ
+  void _showMonetizeDialog() {
+    ProfileDialogsWidget.showFAQDialog(context, showFaq: false);
+  }
+
   /// **NEW: Show Professional FAQ Dialog**
   void _showFAQDialog() {
-    ProfileDialogsWidget.showFAQDialog(context);
+    ProfileDialogsWidget.showFAQDialog(context, showFaq: true);
   }
 
   /// Subscriber list sheet. Opening it marks subscribers as seen, which is

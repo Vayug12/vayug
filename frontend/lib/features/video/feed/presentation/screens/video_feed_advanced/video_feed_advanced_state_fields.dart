@@ -221,11 +221,10 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
 
   final Map<String, ValueNotifier<int>> _currentHorizontalPage = {};
   final Map<String, PageController> _horizontalControllers = {};
+  bool _isBrowsingHorizontalSubpage = false;
 
-  // **Long-press ad overlay state**
-  final ValueNotifier<bool> _showLongPressAdOverlayVN =
-      ValueNotifier<bool>(false);
-  Timer? _longPressAdAutoHideTimer;
+  // **Cinema mode state: long-press hold hides overlay + banner ad**
+  final ValueNotifier<bool> _cinemaModeVN = ValueNotifier<bool>(false);
 
   // **Pause-triggered ad overlay state (no auto-hide — hides when video plays)**
   // Per-video map so the ad is attached to and scrolls with its specific video.

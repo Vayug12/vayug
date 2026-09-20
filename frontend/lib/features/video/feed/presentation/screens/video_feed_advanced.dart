@@ -93,6 +93,7 @@ import 'video_feed_advanced/widgets/feed_pip_player.dart';
 import 'video_feed_advanced/widgets/feed_language_selector_sheet.dart';
 import 'video_feed_advanced/widgets/feed_error_state.dart';
 import 'video_feed_advanced/widgets/feed_empty_state.dart';
+import 'video_feed_advanced/widgets/video_horizontal_pager.dart';
 
 // Modular part extensions
 part 'video_feed_advanced/video_feed_advanced_state_fields.dart';
@@ -816,7 +817,7 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
         _userPaused[videoId] = false;
         _userPausedVN[videoId]?.value = false;
         _playbackCoordinator.setUserPaused(_playbackSession, false);
-        _hideLongPressAdOverlay();
+        _cinemaModeVN.value = false;
         _hidePauseAdOverlay(videoId: videoId);
 
         _lifecyclePaused = false;
@@ -1009,7 +1010,6 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
     _connectivitySubscription?.cancel();
     _bannerAdRetryTimer?.cancel();
     _poolDisposalSubscription?.cancel();
-    _longPressAdAutoHideTimer?.cancel();
 
     for (var s in _dubbingSubscriptions.values) {
       s.cancel();
@@ -1118,7 +1118,7 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
     }
     _forceShowOverlayVN.clear();
 
-    _showLongPressAdOverlayVN.dispose();
+    _cinemaModeVN.dispose();
 
     for (final notifier in _showPauseAdOverlayPerVideoVN.values) {
       notifier.dispose();

@@ -29,9 +29,11 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
       child: _openedFromProfile
           ? PageView.builder(
               controller: _pageController,
-              physics: const ReelsPageScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
+              physics: _isBrowsingHorizontalSubpage
+                  ? const NeverScrollableScrollPhysics()
+                  : const ReelsPageScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
               scrollDirection: Axis.vertical,
               onPageChanged: _onPageChanged,
               itemCount: _getTotalItemCount(),
@@ -43,9 +45,11 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
               onRefresh: refreshVideos,
               child: PageView.builder(
                 controller: _pageController,
-                physics: const ReelsPageScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
+                physics: _isBrowsingHorizontalSubpage
+                    ? const NeverScrollableScrollPhysics()
+                    : const ReelsPageScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
                 scrollDirection: Axis.vertical,
                 onPageChanged: _onPageChanged,
                 itemCount: _getTotalItemCount(),
@@ -640,43 +644,39 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     bool isActive,
     int index,
   ) {
-    final String videoId = video.id;
-    _getOrCreateNotifier<int>(_currentHorizontalPage, videoId, 0);
+    return _buildHorizontalVideoItem(video, controller, isActive, index);
+  }
 
-    return Container(
-      key: ValueKey(
-          'video_${video.id}'), // **FIX: Stable key to prevent player recreation on feed update**
-      width: double.infinity,
-      height: double.infinity,
-      color: AppColors.backgroundPrimary,
-      child: Stack(
-        children: [
-          PageView(
-            controller: _horizontalControllers.putIfAbsent(
-                videoId,
-                () => PageController(
-                    initialPage: _currentHorizontalPage[videoId]!.value)),
-            onPageChanged: (page) {
-              _currentHorizontalPage[videoId]!.value = page;
-              if (page == 1) {
-                // Pause video when swiping to ad
-                _pauseCurrentVideo();
-              } else if (page == 0 && isActive) {
-                // Resume video when swiping back (if it's the active one)
-                _tryAutoplayCurrent();
-              }
-            },
-            physics: const BouncingScrollPhysics(),
-            children: [
-              _buildVideoPage(video, controller, isActive, index),
-              if (_carouselAdManager.shouldShowCarouselAd(index))
-                _buildCarouselAdPage(index)
-              else
-                const SizedBox.shrink(),
-            ],
-          ),
-        ],
-      ),
+  Widget _buildHorizontalVideoItem(
+    VideoModel video,
+    VideoPlayerController? controller,
+    bool isActive,
+    int index,
+  ) {
+    final bool hasAd = _carouselAdManager.shouldShowCarouselAd(index);
+
+    return VideoHorizontalPager(
+      key: ValueKey('video_${video.id}'),
+      video: video,
+      videoPage: _buildVideoPage(video, controller, isActive, index),
+      hasCarouselAd: hasAd,
+      carouselAdPage: hasAd ? _buildCarouselAdPage(index) : null,
+      isActive: isActive,
+      onVideoVisible: () {
+        if (isActive) {
+          _tryAutoplayCurrent();
+        }
+      },
+      onVideoHidden: () {
+        _pauseCurrentVideo();
+      },
+      onSubpageActiveChanged: (bool isSubpage) {
+        if (_isBrowsingHorizontalSubpage != isSubpage) {
+          setState(() {
+            _isBrowsingHorizontalSubpage = isSubpage;
+          });
+        }
+      },
     );
   }
 
@@ -879,7 +879,13 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                     behavior: HitTestBehavior.translucent,
                     onTap: () => _togglePlayPause(index),
                     onDoubleTap: () => _handleDoubleTapLike(video),
-                    onLongPress: () => _showLongPressAd(index),
+                    // **CINEMA MODE: Hold long press to hide UI, release to show**
+                    onLongPressStart: widget.videoType == 'yog'
+                        ? (_) => _cinemaModeVN.value = true
+                        : null,
+                    onLongPressEnd: widget.videoType == 'yog'
+                        ? (_) => _cinemaModeVN.value = false
+                        : null,
                     child: const SizedBox.expand(),
                   ),
                 ),
@@ -1053,27 +1059,23 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                 if (_showHeartAnimation[videoId]?.value == true)
                   _buildHeartAnimation(index),
                 _buildTopGradientOverlay(),
-                ValueListenableBuilder<List<Map<String, dynamic>>>(
-                  valueListenable: _bannerAdsVN,
-                  builder: (context, bannerAds, _) {
-                    return Positioned(
-                      top: MediaQuery.of(context).padding.top + 4,
-                      left: 8,
-                      right: 8,
-                      child: _buildBannerAd(video, index),
+                // **Banner ad: hidden during cinema mode**
+                ValueListenableBuilder<bool>(
+                  valueListenable: _cinemaModeVN,
+                  builder: (context, cinemaMode, _) {
+                    if (cinemaMode) return const SizedBox.shrink();
+                    return ValueListenableBuilder<List<Map<String, dynamic>>>(
+                      valueListenable: _bannerAdsVN,
+                      builder: (context, bannerAds, _) {
+                        return Positioned(
+                          top: MediaQuery.of(context).padding.top + 4,
+                          left: 8,
+                          right: 8,
+                          child: _buildBannerAd(video, index),
+                        );
+                      },
                     );
                   },
-                ),
-                Positioned.fill(
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: _showLongPressAdOverlayVN,
-                    builder: (context, showOverlay, _) {
-                      if (!showOverlay || index != _currentIndex) {
-                        return const SizedBox.shrink();
-                      }
-                      return _buildLongPressAdContent(index);
-                    },
-                  ),
                 ),
 
                 // **PAUSE AD: Attached per-video so it scrolls with the video**
@@ -1567,6 +1569,16 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
             ? systemBottomPadding + 5 // Reduced from 15
             : 14.0; // Reduced from 30
 
+        // **APPLE-CONSISTENT: Yug tab uses stepped-up sizes for visual prominence**
+        final bool isYugTab = widget.videoType == 'yog';
+        final double avatarRadius = isYugTab ? 12.0 : AppConstants.avatarRadius;
+        final double uploaderNameFontSize =
+            isYugTab ? AppTypography.fontSizeLG : AppTypography.fontSizeBase;
+        final double videoTitleFontSize =
+            isYugTab ? AppTypography.fontSizeBase : AppTypography.fontSizeSM;
+        // Action button scale: stepped up to next Apple-style size tier
+        final double actionSizeScale = isYugTab ? 48.0 / 42.0 : 1.0;
+
         Widget overlayContent = RepaintBoundary(
           child: Stack(
             children: [
@@ -1627,8 +1639,8 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                                       onTap: () =>
                                           _navigateToCreatorProfile(video),
                                       child: Container(
-                                        width: AppConstants.avatarRadius * 2,
-                                        height: AppConstants.avatarRadius * 2,
+                                        width: avatarRadius * 2,
+                                        height: avatarRadius * 2,
                                         decoration: const BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: AppColors.textSecondary,
@@ -1719,8 +1731,8 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                                           video.uploader.name,
                                           style: TextStyle(
                                             color: AppColors.white,
-                                            fontSize: AppTypography
-                                                .fontSizeBase, // Increased from 12
+                                            fontSize:
+                                                uploaderNameFontSize, // Apple-consistent: LG in Yug, Base elsewhere
                                             fontWeight: AppTypography
                                                 .weightSemiBold, // Bold
                                           ),
@@ -1752,8 +1764,8 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                                   video.videoName,
                                   style: TextStyle(
                                     color: AppColors.white,
-                                    fontSize: AppTypography
-                                        .fontSizeSM, // Slightly increased
+                                    fontSize:
+                                        videoTitleFontSize, // Apple-consistent: Base in Yug, SM elsewhere
                                     fontWeight:
                                         AppTypography.weightRegular, // Lighter
                                   ),
@@ -1780,13 +1792,16 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                   children: [
                     _buildReportIndicator(index),
                     AppSpacing.vSpace16,
-                    _buildLikeButton(video, index),
+                    _buildLikeButton(video, index,
+                        sizeScale: actionSizeScale),
                     AppSpacing.vSpace12,
-                    _buildAudioDubbingButton(video, index),
+                    _buildAudioDubbingButton(video, index,
+                        sizeScale: actionSizeScale),
                     AppSpacing.vSpace12,
                     _buildVerticalActionButton(
                       icon: Icons.share,
                       onTap: () => _handleShare(video),
+                      sizeScale: actionSizeScale,
                     ),
                     AppSpacing.vSpace12,
                     if (video.episodes != null && video.episodes!.length > 1)
@@ -1795,6 +1810,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                         onTap: () => _showEpisodeList(context, video),
                         labelOverride: 'Episode',
                         isPrimary: true, // **Match Like button size**
+                        sizeScale: actionSizeScale,
                       ),
                   ],
                 ),
@@ -1840,7 +1856,6 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
               )
             : const SizedBox.shrink();
 
-        final bool isYugTab = widget.videoType == 'yog';
         if (!isYugTab || controller == null) {
           return Stack(
             children: [
@@ -1875,6 +1890,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
           visitNowButton: visitNowButton,
           activeQuizVN: _activeQuizVN,
           forceShowNotifier: forceShowNotifier,
+          cinemaModeVN: _cinemaModeVN,
           bottomPadding: bottomPadding,
           onVisitNow: () => _handleVisitNow(video),
           onDismissQuiz: () => _activeQuizVN.value = null,
@@ -1907,7 +1923,12 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     return _getOrCreateNotifier<int>(_likeCountVN, video.id, video.likes);
   }
 
-  Widget _buildLikeButton(VideoModel video, int index) {
+  Widget _buildLikeButton(VideoModel video, int index,
+      {double sizeScale = 1.0}) {
+    final double scaledContainerSize =
+        AppConstants.primaryActionButtonContainerSize * sizeScale;
+    final double scaledIconSize =
+        AppConstants.primaryActionButtonSize * sizeScale;
     return ValueListenableBuilder<bool>(
       valueListenable: _getLikeNotifier(video),
       builder: (context, isLiked, _) {
@@ -1919,7 +1940,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
               mainAxisSize: MainAxisSize.min,
               children: [
                 LikeButton(
-                  size: AppConstants.primaryActionButtonContainerSize,
+                  size: scaledContainerSize,
                   isLiked: isLiked,
                   circleColor: const CircleColor(
                     start: Color(0xff00ddff),
@@ -1932,8 +1953,8 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                   likeBuilder: (bool isLiked) {
                     return Center(
                       child: Container(
-                        width: AppConstants.primaryActionButtonContainerSize,
-                        height: AppConstants.primaryActionButtonContainerSize,
+                        width: scaledContainerSize,
+                        height: scaledContainerSize,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: AppColors.backgroundSecondary
@@ -1951,7 +1972,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                         child: Icon(
                           isLiked ? Icons.favorite : Icons.favorite_border,
                           color: isLiked ? AppColors.error : AppColors.white,
-                          size: AppConstants.primaryActionButtonSize,
+                          size: scaledIconSize,
                           shadows: const [
                             Shadow(
                               color: AppColors.overlayMedium,
@@ -1989,7 +2010,8 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     );
   }
 
-  Widget _buildAudioDubbingButton(VideoModel video, int index) {
+  Widget _buildAudioDubbingButton(VideoModel video, int index,
+      {double sizeScale = 1.0}) {
     final videoId = video.id;
     final resultVN = _getOrCreateNotifier<DubbingResult>(
       _dubbingResultsVN,
@@ -2022,6 +2044,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
           onTap: () => _onAudioDubTap(video),
           color: iconColor,
           labelOverride: label,
+          sizeScale: sizeScale,
         );
       },
     );
@@ -2034,13 +2057,16 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     int? count,
     String? labelOverride,
     bool isPrimary = false,
+    double sizeScale = 1.0,
   }) {
-    final containerSize = isPrimary
-        ? AppConstants.primaryActionButtonContainerSize
-        : AppConstants.secondaryActionButtonContainerSize;
-    final iconSize = isPrimary
-        ? AppConstants.primaryActionButtonSize
-        : AppConstants.secondaryActionButtonSize;
+    final containerSize = (isPrimary
+            ? AppConstants.primaryActionButtonContainerSize
+            : AppConstants.secondaryActionButtonContainerSize) *
+        sizeScale;
+    final iconSize = (isPrimary
+            ? AppConstants.primaryActionButtonSize
+            : AppConstants.secondaryActionButtonSize) *
+        sizeScale;
     final hitTargetSize =
         isPrimary ? _primaryActionHitTargetSize : _secondaryActionHitTargetSize;
 
@@ -2163,48 +2189,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     );
   }
 
-  /// **LONG-PRESS AD OVERLAY: Show carousel ad image on long press**
-  void _showLongPressAd(int index) async {
-    final carouselAd = _carouselAdManager.getCarouselAdForIndex(index);
-    if (carouselAd == null || carouselAd.slides.isEmpty) return;
-
-    _showLongPressAdOverlayVN.value = true;
-
-    // **NEW: Track popup ad impression**
-    if (index < _videos.length) {
-      final video = _videos[index];
-      final adId = carouselAd.id;
-      final userData = await _authService.getUserData();
-
-      if (userData != null) {
-        // Prevent self-impressions
-        if (userData['id'] != video.uploader.id) {
-          try {
-            await _adImpressionService.trackCarouselAdImpression(
-              videoId: video.id,
-              adId: adId,
-              userId: userData['id'],
-              scrollPosition: 0, // Popup is considered position 0
-            );
-          } catch (e) {
-            AppLogger.log('❌ Error tracking popup ad impression: $e');
-          }
-        }
-      }
-    }
-
-    // Auto-hide after 3 seconds
-    _longPressAdAutoHideTimer?.cancel();
-    _longPressAdAutoHideTimer = Timer(const Duration(seconds: 3), () {
-      _hideLongPressAdOverlay();
-    });
-  }
-
-  void _hideLongPressAdOverlay() {
-    _showLongPressAdOverlayVN.value = false;
-    _longPressAdAutoHideTimer?.cancel();
-    _longPressAdAutoHideTimer = null;
-  }
+  // **LONG-PRESS AD OVERLAY: Removed — replaced by cinema mode (hold-to-hide overlay)**
 
   /// **PAUSE AD: Show ad on pause — no auto-hide, hides only when video plays**
   void _showPauseAd(int index) {
@@ -2262,7 +2247,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
               },
               child: GestureDetector(
                 onTap: () async {
-                  _hideLongPressAdOverlay();
+                  _cinemaModeVN.value = false;
                   _hidePauseAdOverlay();
 
                   // **NEW: Track popup ad click**
@@ -2595,6 +2580,7 @@ class _YugOverlayAutoHideHost extends StatefulWidget {
   final Widget visitNowButton;
   final ValueNotifier<QuizModel?> activeQuizVN;
   final ValueNotifier<bool> forceShowNotifier;
+  final ValueNotifier<bool> cinemaModeVN;
   final double bottomPadding;
   final VoidCallback onVisitNow;
   final VoidCallback onDismissQuiz;
@@ -2611,6 +2597,7 @@ class _YugOverlayAutoHideHost extends StatefulWidget {
     required this.visitNowButton,
     required this.activeQuizVN,
     required this.forceShowNotifier,
+    required this.cinemaModeVN,
     required this.bottomPadding,
     required this.onVisitNow,
     required this.onDismissQuiz,
@@ -2726,38 +2713,42 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
         return ValueListenableBuilder<bool>(
           valueListenable: widget.forceShowNotifier,
           builder: (context, forceShow, _) {
-            return ListenableBuilder(
-              listenable: widget.controller,
-              builder: (context, _) {
-                try {
-                  if (sharedPool.isControllerDisposed(widget.controller)) {
-                    return widget.overlayContent;
-                  }
+            return ValueListenableBuilder<bool>(
+              valueListenable: widget.cinemaModeVN,
+              builder: (context, cinemaMode, _) {
+                return ListenableBuilder(
+                  listenable: widget.controller,
+                  builder: (context, _) {
+                    try {
+                      if (sharedPool.isControllerDisposed(widget.controller)) {
+                        return widget.overlayContent;
+                      }
 
-                  final isPlaying = widget.controller.value.isPlaying;
+                      final isPlaying = widget.controller.value.isPlaying;
 
-                  // If quiz is visible, only hide overlay when video is playing.
-                  // If video is paused, we want all the action buttons to appear!
-                  final bool hideOverlayForQuiz = isQuizVisible && isPlaying;
+                      // If quiz is visible, only hide overlay when video is playing.
+                      // If video is paused, we want all the action buttons to appear!
+                      final bool hideOverlayForQuiz = isQuizVisible && isPlaying;
 
-                  // Show overlay if:
-                  // 1. Force show is active (e.g. double-tap like confirmation)
-                  // 2. OR video is paused (!isPlaying)
-                  // 3. OR 3-second auto-hide timer has NOT yet expired (!_isAutoHideExpired)
-                  // And not hidden for quiz
-                  final bool shouldShow =
-                      (forceShow || !isPlaying || !_isAutoHideExpired) &&
-                          !hideOverlayForQuiz;
+                      // Show overlay if:
+                      // 1. Force show is active (e.g. double-tap like confirmation)
+                      // 2. OR video is paused (!isPlaying)
+                      // 3. OR 3-second auto-hide timer has NOT yet expired (!_isAutoHideExpired)
+                      // And not hidden for quiz or cinema mode
+                      final bool shouldShow =
+                          !cinemaMode &&
+                          (forceShow || !isPlaying || !_isAutoHideExpired) &&
+                              !hideOverlayForQuiz;
 
-                  Widget contentWithVisibility = AnimatedOpacity(
-                    opacity: shouldShow ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    child: IgnorePointer(
-                      ignoring: !shouldShow,
-                      child: widget.overlayContent,
-                    ),
-                  );
+                      Widget contentWithVisibility = AnimatedOpacity(
+                        opacity: shouldShow ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: IgnorePointer(
+                          ignoring: !shouldShow,
+                          child: widget.overlayContent,
+                        ),
+                      );
 
                   // Compact state when action buttons are visible or video is paused
                   // (to prevent overlapping the vertical actions bar on the right side)
@@ -2820,9 +2811,11 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
                       ),
                     ],
                   );
-                } catch (e) {
-                  return widget.overlayContent;
-                }
+                    } catch (e) {
+                      return widget.overlayContent;
+                    }
+                  },
+                );
               },
             );
           },

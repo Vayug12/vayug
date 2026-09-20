@@ -57,7 +57,7 @@ extension _VideoFeedPiP on _VideoFeedAdvancedState {
     // 3. Reset ephemeral in-feed overlays (quiz, banner ads, long-press ads)
     try {
       _activeQuizVN.value = null;
-      _showLongPressAdOverlayVN.value = false;
+      _cinemaModeVN.value = false;
       _bannerAdsVN.value = const [];
     } catch (_) {}
   }

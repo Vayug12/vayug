@@ -126,8 +126,10 @@ class ProfileDialogsWidget {
 
   /// Help sheet: displays FAQs, earning flow diagrams, and video walkthrough,
   /// switched from the segmented toggle in the header corner.
-  static void showFAQDialog(BuildContext context) {
-    final section = ValueNotifier<_HelpSection>(_HelpSection.faq);
+  static void showFAQDialog(BuildContext context, {bool showFaq = true}) {
+    final section = ValueNotifier<_HelpSection>(
+      showFaq ? _HelpSection.faq : _HelpSection.guide,
+    );
 
     VayuBottomSheet.show(
       context: context,
@@ -136,13 +138,15 @@ class ProfileDialogsWidget {
       initialChildSize: 0.85,
       minChildSize: 0.45,
       maxChildSize: 0.95,
-      actions: [_HelpSectionToggle(section: section)],
+      actions: [_HelpSectionToggle(section: section, showFaq: showFaq)],
       child: ValueListenableBuilder<_HelpSection>(
         valueListenable: section,
         builder: (context, selected, _) {
           switch (selected) {
             case _HelpSection.faq:
-              return _buildHelpFAQSection(context);
+              return showFaq
+                  ? _buildHelpFAQSection(context)
+                  : _buildHelpGuideSection(context);
             case _HelpSection.video:
               // Swapping the player out of the tree disposes its controller, so
               // nothing keeps buffering while another tab is open.
@@ -445,6 +449,7 @@ class ProfileDialogsWidget {
     required ProfileStateManager stateManager,
   }) async {
     await stateManager.ensurePaymentDetailsHydrated();
+    if (!context.mounted) return;
 
     final userData = stateManager.userData;
     String currentUpi =
@@ -772,9 +777,13 @@ enum _HelpSection { faq, guide, video }
 
 /// Icon-only segmented toggle for the help sheet header corner.
 class _HelpSectionToggle extends StatelessWidget {
-  const _HelpSectionToggle({required this.section});
+  const _HelpSectionToggle({
+    required this.section,
+    this.showFaq = true,
+  });
 
   final ValueNotifier<_HelpSection> section;
+  final bool showFaq;
 
   @override
   Widget build(BuildContext context) {
@@ -790,12 +799,13 @@ class _HelpSectionToggle extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildSegment(
-              value: _HelpSection.faq,
-              selected: selected,
-              icon: Icons.help_outline_rounded,
-              label: 'FAQ',
-            ),
+            if (showFaq)
+              _buildSegment(
+                value: _HelpSection.faq,
+                selected: selected,
+                icon: Icons.help_outline_rounded,
+                label: 'FAQ',
+              ),
             _buildSegment(
               value: _HelpSection.guide,
               selected: selected,

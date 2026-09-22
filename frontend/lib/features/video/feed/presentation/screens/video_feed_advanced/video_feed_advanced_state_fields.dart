@@ -39,6 +39,21 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
 
   // Share links: the initial seek must run exactly once, on the shared video only
   bool _hasAppliedInitialStartSeek = false;
+  String? _dynamicDeepLinkVideoId;
+  int? _dynamicDeepLinkStartAtSeconds;
+  int? _dynamicDeepLinkEndAtSeconds;
+  VideoModel? _pinnedDeepLinkVideo;
+
+  /// Ensures that if a deep link video is currently pinned, it is NEVER
+  /// overwritten by subsequent API page fetches, pre-fetches, or retries.
+  /// Prepends the pinned video at index 0 and removes any duplicates from [incoming].
+  List<VideoModel> _protectWithPinnedDeepLink(List<VideoModel> incoming) {
+    if (_pinnedDeepLinkVideo == null) {
+      return incoming;
+    }
+    final cleanList = incoming.where((v) => v.id != _pinnedDeepLinkVideo!.id).toList();
+    return [_pinnedDeepLinkVideo!, ...cleanList];
+  }
 
   // final Set<String> _followingUsers = {}; // **REMOVED: Now using global UserProvider**
   final Set<String> _seenVideoKeys = <String>{};
@@ -226,9 +241,15 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
   // **Cinema mode state: long-press hold hides overlay + banner ad**
   final ValueNotifier<bool> _cinemaModeVN = ValueNotifier<bool>(false);
 
+  // **Banner ad dismissed per-video state (session-level persistence)**
+  final Map<String, ValueNotifier<bool>> _bannerAdDismissedPerVideoVN = {};
+
   // **Pause-triggered ad overlay state (no auto-hide — hides when video plays)**
   // Per-video map so the ad is attached to and scrolls with its specific video.
   final Map<String, ValueNotifier<bool>> _showPauseAdOverlayPerVideoVN = {};
+
+  // **Dismissed pause ads per-video set (session-level persistence)**
+  final Set<String> _dismissedPauseAdVideoIds = {};
 
   // Screen visibility
   bool _isScreenVisible =
@@ -241,6 +262,9 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
   // **NEW: Force-show overlay after double-tap like for confirmation**
   final Map<String, ValueNotifier<bool>> _forceShowOverlayVN = {};
   final Map<String, Timer> _forceShowOverlayTimers = {};
+
+  // **NEW: Track CTA link reveal state (keyed by Video ID)**
+  final Map<String, ValueNotifier<bool>> _linkRevealedVN = {};
 
   // **NEW: Granular Like State Notifiers (Keyed by Video ID)**
   final Map<String, ValueNotifier<bool>> _isLikedVN = {};

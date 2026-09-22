@@ -9,6 +9,7 @@ import 'package:vayug/features/video/vayu/presentation/widgets/vayu_video_progre
 import 'package:vayug/core/design/spacing.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:vayug/shared/widgets/interactive_scale_button.dart';
 
 enum GestureType { none, horizontal, vertical, scale }
 
@@ -283,38 +284,72 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
     );
   }
 
-  Widget _bottomCircleButton({
-    required IconData icon,
-    required VoidCallback onPressed,
+  Widget _buildActionCapsule({
     required bool isPortrait,
   }) {
-    final controlSize =
-        VayuPlayerLayout.utilityControlSize(isPortrait: isPortrait);
-    final iconSize = VayuPlayerLayout.utilityIconSize(isPortrait: isPortrait);
-    final surfaceSize = VayuPlayerLayout.compactSurfaceSize(iconSize);
-    return SizedBox(
-      width: controlSize,
-      height: controlSize,
-      child: Center(
-        child: SizedBox.square(
-          dimension: surfaceSize,
-          child: IconButton(
-            constraints: const BoxConstraints(),
-            padding: const EdgeInsets.all(
-              VayuPlayerLayout.compactIconPadding,
-            ),
-            icon: Icon(
-              icon,
-              color: Colors.white,
-              size: iconSize,
-            ),
-            onPressed: onPressed,
-            style: IconButton.styleFrom(
-              fixedSize: Size.square(surfaceSize),
-              backgroundColor: Colors.black.withValues(alpha: 0.24),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: const CircleBorder(),
-            ),
+    final capsuleHeight = isPortrait
+        ? VayuPlayerLayout.actionCapsuleHeightPortrait
+        : VayuPlayerLayout.actionCapsuleHeightLandscape;
+    final iconSize =
+        VayuPlayerLayout.utilityIconSize(isPortrait: isPortrait);
+
+    return Container(
+      height: capsuleHeight,
+      decoration: BoxDecoration(
+        color: VayuPlayerLayout.pillBackgroundColor,
+        borderRadius: BorderRadius.circular(capsuleHeight / 2),
+        border: Border.all(
+          color: VayuPlayerLayout.pillBorderColor,
+          width: VayuPlayerLayout.pillBorderWidth,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _buildCapsuleActionItem(
+            icon: Icons.open_in_new_rounded,
+            iconSize: iconSize,
+            onTap: widget.onOpenExternalPlayer,
+            height: capsuleHeight,
+          ),
+          const SizedBox(width: 6),
+          _buildCapsuleActionItem(
+            icon: isPortrait
+                ? Icons.fullscreen_rounded
+                : Icons.fullscreen_exit_rounded,
+            iconSize: iconSize + 1,
+            onTap: widget.onToggleFullScreen,
+            height: capsuleHeight,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCapsuleActionItem({
+    required IconData icon,
+    required double iconSize,
+    required VoidCallback onTap,
+    required double height,
+  }) {
+    return InteractiveScaleButton(
+      onTap: onTap,
+      scaleDownFactor: 0.92,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: VayuPlayerLayout.minTouchTarget,
+          minHeight: height,
+        ),
+        child: Container(
+          height: height,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: iconSize,
           ),
         ),
       ),
@@ -620,34 +655,45 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
-                                        // Duration Text (Instant Frost + Tabular Figures)
+                                        // Duration Text (Apple HIG Ultra-Compact Pill)
                                         if (controller != null)
                                           ValueListenableBuilder<
                                                   VideoPlayerValue>(
                                               valueListenable: controller,
                                               builder: (context, value, _) {
+                                                final pillHeight = isPortrait
+                                                    ? VayuPlayerLayout
+                                                        .durationPillHeightPortrait
+                                                    : VayuPlayerLayout
+                                                        .durationPillHeightLandscape;
                                                 return Container(
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: isPortrait
-                                                        ? AppSpacing.spacing2
-                                                        : AppSpacing.spacing3,
-                                                    vertical:
-                                                        AppSpacing.spacing1,
+                                                  height: pillHeight,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 10,
                                                   ),
+                                                  alignment: Alignment.center,
                                                   decoration: BoxDecoration(
-                                                    color: Colors.black45,
+                                                    color: VayuPlayerLayout
+                                                        .pillBackgroundColor,
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                            16),
+                                                            pillHeight / 2),
+                                                    border: Border.all(
+                                                      color: VayuPlayerLayout
+                                                          .pillBorderColor,
+                                                      width: VayuPlayerLayout
+                                                          .pillBorderWidth,
+                                                    ),
                                                   ),
                                                   child: Text(
                                                     '${widget.formatDuration(value.position)} / ${widget.formatDuration(value.duration)}',
                                                     style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize:
-                                                          isPortrait ? 10 : 11,
+                                                      color: Colors.white
+                                                          .withValues(alpha: 0.95),
+                                                      fontSize: 11,
                                                       fontWeight:
-                                                          FontWeight.w500,
+                                                          FontWeight.w600,
                                                       fontFeatures: const [
                                                         FontFeature
                                                             .tabularFigures()
@@ -657,7 +703,7 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                                                 );
                                               }),
 
-                                        // Action Buttons (Play/External & Fullscreen)
+                                        // Action Buttons (Apple Segmented Action Capsule)
                                         ValueListenableBuilder<bool>(
                                             valueListenable:
                                                 widget.isControlsLockedVN,
@@ -665,28 +711,8 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                                               if (isLocked) {
                                                 return const SizedBox.shrink();
                                               }
-                                              return Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  _bottomCircleButton(
-                                                    icon: Icons
-                                                        .open_in_new_rounded,
-                                                    onPressed: widget
-                                                        .onOpenExternalPlayer,
-                                                    isPortrait: isPortrait,
-                                                  ),
-                                                  AppSpacing.hSpace8,
-                                                  _bottomCircleButton(
-                                                    icon: isPortrait
-                                                        ? Icons
-                                                            .fullscreen_rounded
-                                                        : Icons
-                                                            .fullscreen_exit_rounded,
-                                                    onPressed: widget
-                                                        .onToggleFullScreen,
-                                                    isPortrait: isPortrait,
-                                                  ),
-                                                ],
+                                              return _buildActionCapsule(
+                                                isPortrait: isPortrait,
                                               );
                                             }),
                                       ],

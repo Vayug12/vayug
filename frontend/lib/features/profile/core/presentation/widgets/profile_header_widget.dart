@@ -185,21 +185,9 @@ class ProfileHeaderWidget extends ConsumerWidget {
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
-                                  () {
-                                    var domain = stateManager
-                                        .userData!['websiteUrl']
-                                        .toString()
-                                        .replaceFirst(
-                                            RegExp(r'^https?://'), '')
-                                        .replaceFirst(RegExp(r'^www\.'), '')
-                                        .split('/')
-                                        .first
-                                        .replaceFirst(RegExp(r'\.com$'), '')
-                                        .replaceFirst(RegExp(r'\.in$'), '')
-                                        .replaceFirst(RegExp(r'\.org$'), '')
-                                        .replaceFirst(RegExp(r'\.net$'), '');
-                                    return domain;
-                                  }(),
+                                  UrlUtils.formatShortDomain(stateManager
+                                      .userData!['websiteUrl']
+                                      .toString()),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySmall.copyWith(

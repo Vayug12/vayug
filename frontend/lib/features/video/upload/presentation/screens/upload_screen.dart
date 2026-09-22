@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:vayug/shared/services/file_picker_service.dart';
+import 'package:vayug/shared/services/share_receiver_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vayug/core/providers/auth_providers.dart';
 import 'package:vayug/core/providers/navigation_providers.dart';
@@ -72,6 +73,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   late final IAuthService _authService;
   late final FilePickerService _filePickerService;
   StreamSubscription<UploadUiMessage>? _uiMessageSubscription;
+  StreamSubscription<File>? _shareSubscription;
 
   @override
   void initState() {
@@ -88,10 +90,24 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         );
       }
     });
+
+    _shareSubscription = ShareReceiverService.instance.onVideoShared.listen((file) {
+      if (mounted) {
+        _loadSharedVideo(file);
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pending = ShareReceiverService.instance.consumePendingSharedVideo();
+      if (pending != null && mounted) {
+        _loadSharedVideo(pending);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _shareSubscription?.cancel();
     _uiMessageSubscription?.cancel();
     _titleController.dispose();
     _linkController.dispose();
@@ -180,6 +196,33 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       if (mounted) {
         _loadingActions.value = Set.from(_loadingActions.value)..remove('video');
       }
+    }
+  }
+
+  Future<void> _loadSharedVideo(File file) async {
+    if (ref.read(uploadStateManagerProvider).isUploadInFlight) {
+      if (mounted) {
+        VayuSnackBar.showInfo(
+          context,
+          'An upload is still running. You can start the next one as soon as it finishes.',
+        );
+      }
+      return;
+    }
+
+    try {
+      final userData = await _authService.getUserData();
+      if (userData == null) {
+        if (mounted) _showLoginPrompt();
+        return;
+      }
+
+      ref.read(uploadStateManagerProvider).setVideo(file);
+      _titleController.text = _deriveTitleFromFile(file);
+      _showUploadForm.value = true;
+      _probeVideoMetadata(file);
+    } catch (e) {
+      AppLogger.log('❌ UploadScreen: Error loading shared video: $e');
     }
   }
 

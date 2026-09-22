@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:talker_flutter/talker_flutter.dart';
 import 'package:vayug/features/video/upload/presentation/screens/upload_screen.dart';
 import 'package:vayug/core/providers/navigation_providers.dart';
+import 'package:vayug/shared/services/share_receiver_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,6 +35,9 @@ import 'package:vayug/features/profile/core/presentation/screens/saved_videos_sc
 import 'package:vayug/features/profile/analytics/presentation/screens/creator_revenue_screen.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:vayug/core/providers/profile_providers.dart';
+import 'package:vayug/features/video/core/data/models/video_model.dart';
+import 'package:vayug/features/video/core/data/services/video_service.dart';
+import 'package:vayug/features/video/vayu/presentation/screens/vayu_long_form_player_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -44,7 +48,7 @@ class MainScreen extends ConsumerStatefulWidget {
 
 class _MainScreenState extends ConsumerState<MainScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
-  final _videoScreenKey = GlobalKey();
+  final _videoScreenKey = GlobalKey<VideoScreenState>();
   final _vayuScreenKey = GlobalKey<VayuScreenState>();
   final _profileScreenKey = GlobalKey<State<ProfileScreen>>();
   final AuthService _authService = AuthService();
@@ -223,6 +227,20 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
     _checkTokenValidity();
 
+    // **DEEP LINK: Register video navigation handler**
+    DeepLinkService().onVideoResolved = _handleDeepLinkVideo;
+
+    // **SHARE RECEIVER: Listen for incoming video shares from external apps**
+    ShareReceiverService.instance.initialize(
+      onVideoReceived: (file) {
+        if (mounted) {
+          AppLogger.log(
+              '📥 MainScreen: External video received, switching to upload tab');
+          ref.read(mainControllerProvider).changeIndex(2);
+        }
+      },
+    );
+
     // **NEW: Initialize session expiration callback**
     HttpClientService.instance.onSessionExpired = () {
       if (mounted) {
@@ -235,6 +253,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
     // **NEW: Restore last tab index when app starts**
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restoreLastTabIndex();
+
+      // **SHARE RECEIVER COLD START**: If app launched via share intent, jump to upload tab
+      if (ShareReceiverService.instance.pendingSharedVideo != null) {
+        ref.read(mainControllerProvider).changeIndex(2);
+      }
 
       // **DEEP LINK FIX: Home UI is mounted — safe to navigate now.**
       // Any video link that arrived during splash/cold start is flushed here.
@@ -283,6 +306,98 @@ class _MainScreenState extends ConsumerState<MainScreen>
           '🚀 MainScreen: Fresh start initiated (persistence disabled)');
     } catch (e) {
       AppLogger.log('❌ MainScreen: Error resetting tab index: $e');
+    }
+  }
+
+  /// **DEEP LINK: Navigate seamlessly to existing Yug or Vayu tab**
+  Future<void> _handleDeepLinkVideo(
+    VideoModel video, {
+    Duration? initialPosition,
+    Duration? sectionEnd,
+  }) async {
+    if (!mounted) return;
+    AppLogger.log(
+      '🔗 MainScreen: Handling deep link video ${video.id} (type: ${video.videoType})',
+    );
+
+    // Dismiss any active root dialogs or bottom sheets
+    final rootContext = AuthService.navigatorKey.currentContext;
+    if (rootContext != null) {
+      try {
+        Navigator.of(rootContext).popUntil((route) => route.isFirst);
+      } catch (_) {}
+    }
+
+    final mainController = ref.read(mainControllerProvider);
+
+    if (video.videoType == 'vayu') {
+      // 1. Switch to Vayu tab (index 1)
+      _handleNavTap(1, mainController);
+
+      // 2. Pop any nested routes inside Vayu tab to ensure base screen
+      final vayuNav = _navigatorKeys[1].currentState;
+      vayuNav?.popUntil((route) => route.isFirst);
+
+      // 3. Prepare related videos from existing Vayu list or fetch if empty
+      List<VideoModel> related = _vayuScreenKey.currentState?.videos ?? [];
+      if (related.isEmpty) {
+        try {
+          final res = await VideoService().getVideos(
+            page: 1,
+            limit: 10,
+            videoType: 'vayu',
+          );
+          final list = res['videos'] as List?;
+          if (list != null) {
+            related = list
+                .map((item) => VideoModel.fromJson(item as Map<String, dynamic>))
+                .toList();
+          }
+        } catch (e) {
+          AppLogger.log('⚠️ MainScreen: Error pre-fetching related Vayu videos: $e');
+        }
+      }
+
+      // 4. Push VayuLongFormPlayerScreen inside Tab 1's nested navigator
+      if (mounted) {
+        _navigatorKeys[1].currentState?.push(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: '/vayu_video'),
+            builder: (context) => VayuLongFormPlayerScreen(
+              video: video,
+              relatedVideos: related,
+              initialPosition: initialPosition,
+              sectionEnd: sectionEnd,
+            ),
+          ),
+        );
+      }
+    } else {
+      // 1. Switch to Yug tab (index 0)
+      _handleNavTap(0, mainController);
+
+      // 2. Pop any nested routes inside Yug tab (e.g. creator profile)
+      final yugNav = _navigatorKeys[0].currentState;
+      yugNav?.popUntil((route) => route.isFirst);
+
+      // 3. Tell VideoScreenState to dynamically inject and play video at index 0
+      unawaited(() async {
+        // Poll for up to 3 seconds (60 attempts * 50ms) to ensure cold-start mounting finishes
+        for (int i = 0; i < 60; i++) {
+          final videoScreenState = _videoScreenKey.currentState;
+          if (videoScreenState != null) {
+            await videoScreenState.playDeepLinkVideo(
+              video,
+              startAtSeconds: initialPosition?.inSeconds,
+              endAtSeconds: sectionEnd?.inSeconds,
+            );
+            return;
+          }
+          await Future.delayed(const Duration(milliseconds: 50));
+          if (!mounted) return;
+        }
+        AppLogger.log('❌ MainScreen: VideoScreenState not found for deep link after retry');
+      }());
     }
   }
 
@@ -396,6 +511,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    DeepLinkService().onVideoResolved = null;
     // **NEW: Dispose animation controller**
 
     _refreshAnimationController.dispose();

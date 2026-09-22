@@ -87,7 +87,7 @@ class VideoOrientationDialog extends StatelessWidget {
         onTap: () => Navigator.of(context).pop(choice),
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
@@ -107,12 +107,17 @@ class VideoOrientationDialog extends StatelessWidget {
                 size: 38,
               ),
               const SizedBox(height: 10),
-              Text(
-                label,
-                style: AppTypography.titleMedium.copyWith(
-                  color: isDetected ? AppColors.primary : AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AppTypography.titleMedium.copyWith(
+                    color: isDetected ? AppColors.primary : AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ],

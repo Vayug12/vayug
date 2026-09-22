@@ -1,4 +1,5 @@
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+import 'package:vayug/shared/utils/url_utils.dart';
 
 class VideoLink {
   final String url;
@@ -11,20 +12,9 @@ class VideoLink {
     this.showAtSeconds = 0,
   });
 
-  String get displayTitle {
-    if (title.trim().isNotEmpty) return title.trim();
-    return cleanDomain;
-  }
+  String get displayTitle => UrlUtils.formatShortDomain(url);
 
-  String get cleanDomain {
-    try {
-      final uri = Uri.tryParse(url.trim());
-      if (uri != null && uri.host.isNotEmpty) {
-        return uri.host.replaceFirst(RegExp(r'^www\.'), '');
-      }
-    } catch (_) {}
-    return url.trim();
-  }
+  String get cleanDomain => UrlUtils.formatShortDomain(url);
 
   LinkItemData toLinkItemData() => LinkItemData(
         url: url,

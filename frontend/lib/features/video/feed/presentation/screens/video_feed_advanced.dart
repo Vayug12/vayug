@@ -94,6 +94,7 @@ import 'video_feed_advanced/widgets/feed_language_selector_sheet.dart';
 import 'video_feed_advanced/widgets/feed_error_state.dart';
 import 'video_feed_advanced/widgets/feed_empty_state.dart';
 import 'video_feed_advanced/widgets/video_horizontal_pager.dart';
+import 'video_feed_advanced/widgets/pause_pop_ad_overlay.dart';
 
 // Modular part extensions
 part 'video_feed_advanced/video_feed_advanced_state_fields.dart';
@@ -1124,6 +1125,12 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
       notifier.dispose();
     }
     _showPauseAdOverlayPerVideoVN.clear();
+
+    for (final notifier in _bannerAdDismissedPerVideoVN.values) {
+      notifier.dispose();
+    }
+    _bannerAdDismissedPerVideoVN.clear();
+    _dismissedPauseAdVideoIds.clear();
 
     _pageController.dispose();
 

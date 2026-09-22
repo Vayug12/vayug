@@ -53,11 +53,15 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
   /// first play. Runs at most once and only for the deep-linked video.
   void _maybeApplyInitialStartSeek(
       String videoId, VideoPlayerController controller) {
-    final startSeconds = widget.startAtSeconds;
-    if (startSeconds == null || startSeconds <= 0 || _hasAppliedInitialStartSeek) {
+    final startSeconds =
+        _dynamicDeepLinkStartAtSeconds ?? widget.startAtSeconds;
+    if (startSeconds == null ||
+        startSeconds <= 0 ||
+        _hasAppliedInitialStartSeek) {
       return;
     }
-    if (widget.initialVideoId != null && videoId != widget.initialVideoId) {
+    final targetVideoId = _dynamicDeepLinkVideoId ?? widget.initialVideoId;
+    if (targetVideoId != null && videoId != targetVideoId) {
       return;
     }
     _hasAppliedInitialStartSeek = true;
@@ -74,6 +78,48 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
     } catch (e) {
       AppLogger.log('⚠️ VideoFeedAdvanced: Initial seek failed for $videoId: $e');
     }
+  }
+
+  Future<void> playDeepLinkVideo(
+    VideoModel video, {
+    int? startAtSeconds,
+    int? endAtSeconds,
+  }) async {
+    AppLogger.log('🔗 VideoFeedAdvanced: playDeepLinkVideo for ${video.id}');
+    _pinnedDeepLinkVideo = video;
+    _dynamicDeepLinkVideoId = video.id;
+    _dynamicDeepLinkStartAtSeconds = startAtSeconds;
+    _dynamicDeepLinkEndAtSeconds = endAtSeconds;
+    _hasAppliedInitialStartSeek = false;
+
+    // Pause current playing video
+    _pauseCurrentVideo();
+
+    // Check if video is already at index 0
+    final existingIndex = _videos.indexWhere((v) => v.id == video.id);
+    if (existingIndex != -1) {
+      if (existingIndex != 0) {
+        final existing = _videos.removeAt(existingIndex);
+        _videos.insert(0, existing);
+      }
+    } else {
+      _videos.insert(0, video);
+    }
+
+    safeSetState(() {
+      _currentIndex = 0;
+      _activeQuizVN.value = null;
+    });
+
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+
+    SharedVideoControllerPool()
+        .pinVideo(video.id, sessionId: _playbackSession.id);
+
+    forcePlayCurrent();
+    unawaited(_preloadVideo(0));
   }
 
   void forcePlayCurrent() {

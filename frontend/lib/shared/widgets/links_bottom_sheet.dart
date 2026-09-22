@@ -20,22 +20,11 @@ class LinkItemData {
     this.showAtSeconds = 0,
   });
 
-  /// Displays the custom title if provided, otherwise extracts a clean host
-  String get displayTitle {
-    if (title.trim().isNotEmpty) return title.trim();
-    return cleanDomain;
-  }
+  /// Always displays the clean shortened domain for transparency and safety
+  String get displayTitle => UrlUtils.formatShortDomain(url);
 
-  /// Extracts the host domain name (e.g., 'example.com')
-  String get cleanDomain {
-    try {
-      final uri = Uri.tryParse(url.trim());
-      if (uri != null && uri.host.isNotEmpty) {
-        return uri.host.replaceFirst(RegExp(r'^www\.'), '');
-      }
-    } catch (_) {}
-    return url.trim();
-  }
+  /// Extracts the clean host/domain name
+  String get cleanDomain => UrlUtils.formatShortDomain(url);
 }
 
 /// **LinksBottomSheet - Premium bottom sheet to display multiple links**

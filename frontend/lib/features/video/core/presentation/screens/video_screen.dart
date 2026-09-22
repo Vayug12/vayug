@@ -28,11 +28,15 @@ class VideoScreen extends ConsumerStatefulWidget {
   }) : super(key: key);
 
   @override
-  ConsumerState<VideoScreen> createState() => _VideoScreenState();
+  ConsumerState<VideoScreen> createState() => VideoScreenState();
 }
 
-class _VideoScreenState extends ConsumerState<VideoScreen> {
+class VideoScreenState extends ConsumerState<VideoScreen> {
   final GlobalKey _videoFeedKey = GlobalKey();
+
+  VideoModel? _pendingDeepLinkVideo;
+  int? _pendingStartAtSeconds;
+  int? _pendingEndAtSeconds;
 
   /// **PUBLIC: Refresh video list after upload**
   Future<void> refreshVideos() async {
@@ -47,6 +51,47 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
     }
   }
 
+  /// **PUBLIC: Play a shared deep-linked video dynamically at the top of feed**
+  Future<void> playDeepLinkVideo(
+    VideoModel video, {
+    int? startAtSeconds,
+    int? endAtSeconds,
+  }) async {
+    AppLogger.log('🔗 VideoScreen: playDeepLinkVideo called for ${video.id}');
+    final videoFeedState = _videoFeedKey.currentState;
+    if (videoFeedState != null) {
+      _pendingDeepLinkVideo = null;
+      await (videoFeedState as dynamic).playDeepLinkVideo(
+        video,
+        startAtSeconds: startAtSeconds,
+        endAtSeconds: endAtSeconds,
+      );
+    } else {
+      AppLogger.log('⏳ VideoScreen: VideoFeedAdvanced not mounted yet, queueing deep link for ${video.id}');
+      _pendingDeepLinkVideo = video;
+      _pendingStartAtSeconds = startAtSeconds;
+      _pendingEndAtSeconds = endAtSeconds;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _flushPendingDeepLink());
+    }
+  }
+
+  void _flushPendingDeepLink() {
+    if (_pendingDeepLinkVideo != null && _videoFeedKey.currentState != null) {
+      final video = _pendingDeepLinkVideo!;
+      final startAt = _pendingStartAtSeconds;
+      final endAt = _pendingEndAtSeconds;
+      _pendingDeepLinkVideo = null;
+      _pendingStartAtSeconds = null;
+      _pendingEndAtSeconds = null;
+      AppLogger.log('🚀 VideoScreen: Flushing queued deep link for ${video.id}');
+      (_videoFeedKey.currentState as dynamic).playDeepLinkVideo(
+        video,
+        startAtSeconds: startAt,
+        endAtSeconds: endAt,
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +101,7 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
     // here: this screen used to call forcePauseVideos() after its own feed had
     // already been activated, muting the video it was about to play.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _flushPendingDeepLink();
       final state = _videoFeedKey.currentState;
       if (state != null) {
         try {
@@ -66,6 +112,7 @@ class _VideoScreenState extends ConsumerState<VideoScreen> {
 
     // Some devices need a short delay for the first frame to attach
     Future.delayed(const Duration(milliseconds: 120), () {
+      _flushPendingDeepLink();
       final s = _videoFeedKey.currentState;
       if (s != null) {
         try {

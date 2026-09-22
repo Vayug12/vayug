@@ -165,4 +165,34 @@ class UrlUtils {
       return trimmedUrl; // Return original if parsing fails
     }
   }
+
+  /// Formats a URL into a clean, shortened domain string for safe display on buttons.
+  /// Example: 'https://chat.whatsapp.com/...' -> 'chat.whatsapp'
+  /// Example: 'https://www.youtube.com/watch?v=...' -> 'youtube'
+  /// Example: 'https://play.google.com/store/...' -> 'play.google'
+  static String formatShortDomain(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return '';
+
+    try {
+      var domain = trimmed
+          .replaceFirst(RegExp(r'^https?://', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'^www\.', caseSensitive: false), '')
+          .split('/')
+          .first
+          .split('?')
+          .first
+          .split('#')
+          .first
+          .replaceFirst(RegExp(r'\.com$', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'\.in$', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'\.org$', caseSensitive: false), '')
+          .replaceFirst(RegExp(r'\.net$', caseSensitive: false), '')
+          .trim();
+
+      return domain.isNotEmpty ? domain : trimmed;
+    } catch (_) {
+      return trimmed;
+    }
+  }
 }

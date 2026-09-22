@@ -76,7 +76,6 @@ class VayuPlayerOverlay extends StatelessWidget {
                           size: utilityControlSize,
                           icon: Icons.keyboard_arrow_up_rounded,
                           iconSize: utilityIconSize + 2,
-                          surfaceOpacity: 0.24,
                         );
                       },
                     ),
@@ -91,13 +90,11 @@ class VayuPlayerOverlay extends StatelessWidget {
                     size: utilityControlSize,
                     icon: Icons.more_vert_rounded,
                     iconSize: utilityIconSize,
-                    surfaceOpacity: 0.24,
                   ),
                 ),
 
                 // Center controls — symmetrical previous · play/pause · next.
-                // One shared circle treatment; the primary control is simply
-                // the largest, which is all the hierarchy this zone needs.
+                // Apple HIG discrete pills with subtle border and spring feedback.
                 ValueListenableBuilder<bool>(
                   valueListenable: isControlsLockedVN,
                   builder: (context, isLocked, _) {
@@ -114,7 +111,6 @@ class VayuPlayerOverlay extends StatelessWidget {
                               icon: Icons.skip_previous_rounded,
                               iconSize:
                                   VayuPlayerLayout.landscapeTransportIconSize,
-                              surfaceOpacity: 0.28,
                             ),
                             SizedBox(width: VayuPlayerLayout.transportGap),
                           ],
@@ -140,16 +136,21 @@ class VayuPlayerOverlay extends StatelessWidget {
 
                                   return InteractiveScaleButton(
                                     onTap: onTogglePlay,
+                                    scaleDownFactor: 0.94,
                                     child: Container(
                                       width: primaryControlSize,
                                       height: primaryControlSize,
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.36),
+                                        color: Colors.black.withValues(alpha: 0.42),
                                         shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: VayuPlayerLayout.pillBorderColor,
+                                          width: VayuPlayerLayout.pillBorderWidth,
+                                        ),
                                       ),
                                       child: Transform.translate(
                                         offset: Offset(
-                                          value.isPlaying ? 0 : 1,
+                                          value.isPlaying ? 0 : 1.5,
                                           0,
                                         ),
                                         child: Icon(
@@ -175,7 +176,6 @@ class VayuPlayerOverlay extends StatelessWidget {
                               icon: Icons.skip_next_rounded,
                               iconSize:
                                   VayuPlayerLayout.landscapeTransportIconSize,
-                              surfaceOpacity: 0.28,
                             ),
                           ],
                         ],
@@ -196,28 +196,32 @@ class VayuPlayerOverlay extends StatelessWidget {
     required double size,
     required IconData icon,
     required double iconSize,
-    required double surfaceOpacity,
   }) {
-    final surfaceSize = VayuPlayerLayout.compactSurfaceSize(iconSize);
     return InteractiveScaleButton(
       onTap: onTap,
-      child: SizedBox(
-        width: size,
-        height: size,
+      scaleDownFactor: 0.94,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: VayuPlayerLayout.minTouchTarget,
+          minHeight: VayuPlayerLayout.minTouchTarget,
+        ),
         child: Center(
-          child: SizedBox.square(
-            dimension: surfaceSize,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: surfaceOpacity),
-                shape: BoxShape.circle,
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: VayuPlayerLayout.pillBackgroundColor,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: VayuPlayerLayout.pillBorderColor,
+                width: VayuPlayerLayout.pillBorderWidth,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(
-                  VayuPlayerLayout.compactIconPadding,
-                ),
-                child: Icon(icon, color: Colors.white, size: iconSize),
-              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: iconSize,
             ),
           ),
         ),

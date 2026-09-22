@@ -930,9 +930,10 @@ extension _VideoFeedPreload on _VideoFeedAdvancedState {
 
         final position = value.position;
 
-        final sectionEnd = widget.endAtSeconds;
+        final sectionEnd = _dynamicDeepLinkEndAtSeconds ?? widget.endAtSeconds;
+        final targetVideoId = _dynamicDeepLinkVideoId ?? widget.initialVideoId;
         final isSharedSection = sectionEnd != null &&
-            widget.initialVideoId == videoId &&
+            targetVideoId == videoId &&
             sectionEnd > 0;
         if (isSharedSection && position >= Duration(seconds: sectionEnd)) {
           controller.pause();

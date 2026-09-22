@@ -1059,19 +1059,29 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                 if (_showHeartAnimation[videoId]?.value == true)
                   _buildHeartAnimation(index),
                 _buildTopGradientOverlay(),
-                // **Banner ad: hidden during cinema mode**
+                // **Banner ad: hidden during cinema mode or when dismissed for this video**
                 ValueListenableBuilder<bool>(
                   valueListenable: _cinemaModeVN,
                   builder: (context, cinemaMode, _) {
                     if (cinemaMode) return const SizedBox.shrink();
-                    return ValueListenableBuilder<List<Map<String, dynamic>>>(
-                      valueListenable: _bannerAdsVN,
-                      builder: (context, bannerAds, _) {
-                        return Positioned(
-                          top: MediaQuery.of(context).padding.top + 4,
-                          left: 8,
-                          right: 8,
-                          child: _buildBannerAd(video, index),
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: _getOrCreateNotifier<bool>(
+                        _bannerAdDismissedPerVideoVN,
+                        videoId,
+                        false,
+                      ),
+                      builder: (context, isDismissed, _) {
+                        if (isDismissed) return const SizedBox.shrink();
+                        return ValueListenableBuilder<List<Map<String, dynamic>>>(
+                          valueListenable: _bannerAdsVN,
+                          builder: (context, bannerAds, _) {
+                            return Positioned(
+                              top: MediaQuery.of(context).padding.top + 4,
+                              left: 8,
+                              right: 8,
+                              child: _buildBannerAd(video, index),
+                            );
+                          },
                         );
                       },
                     );
@@ -1252,6 +1262,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     return BannerAdSection(
       adData: adDataWithVideoId, // **FIXED: Pass custom ad data for fallback**
       adService: _activeAdsService,
+      onClose: () => _dismissBannerAdForVideo(video.id),
       onVideoPause: () {
         // Pause the currently playing video while the browser is open
         final videoId = index < _videos.length ? _videos[index].id : null;
@@ -1322,6 +1333,12 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
         }
       },
     );
+  }
+
+  void _dismissBannerAdForVideo(String videoId) {
+    AppLogger.log('🚫 Banner ad dismissed by user for video $videoId');
+    _getOrCreateNotifier<bool>(_bannerAdDismissedPerVideoVN, videoId, false)
+        .value = true;
   }
 
   Widget _buildVideoProgressBar(VideoPlayerController controller) {
@@ -1579,6 +1596,15 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
         // Action button scale: stepped up to next Apple-style size tier
         final double actionSizeScale = isYugTab ? 48.0 / 42.0 : 1.0;
 
+        final int linkShowAtSeconds = video.validLinks.isNotEmpty
+            ? video.validLinks
+                .map((l) => l.showAtSeconds)
+                .reduce((a, b) => a < b ? a : b)
+            : 0;
+
+        final ValueNotifier<bool> linkRevealedVN = _linkRevealedVN[video.id] ??=
+            ValueNotifier<bool>(linkShowAtSeconds == 0);
+
         Widget overlayContent = RepaintBoundary(
           child: Stack(
             children: [
@@ -1603,16 +1629,22 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                   ),
                 ),
               ),
-              Positioned(
-                // **FIX: Adjust bottom padding if Visit Now button is present (approx 55px height)**
-                bottom: (video.link?.isNotEmpty == true)
-                    ? bottomPadding + 65
-                    : bottomPadding,
-                left: 0,
-                // **FIX: Reserve dynamic space for right-side action column**
-                // Prevents "Right overflowed by X pixels" on some devices.
-                right: _secondaryActionHitTargetSize + 40,
-                child: ValueListenableBuilder<QuizModel?>(
+              ValueListenableBuilder<bool>(
+                valueListenable: linkRevealedVN,
+                builder: (context, isLinkRevealed, _) {
+                  return AnimatedPositioned(
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                    // **FIX: Only elevate video title when Visit Now button is ACTUALLY revealed**
+                    // Keeps title at bottom before showAtSeconds (0 empty gap)
+                    bottom: (video.hasLink && isLinkRevealed)
+                        ? bottomPadding + 65
+                        : bottomPadding,
+                    left: 0,
+                    // **FIX: Reserve dynamic space for right-side action column**
+                    // Prevents "Right overflowed by X pixels" on some devices.
+                    right: _secondaryActionHitTargetSize + 40,
+                    child: ValueListenableBuilder<QuizModel?>(
                   valueListenable: _activeQuizVN,
                   builder: (context, activeQuiz, _) {
                     final bool isQuizVisible =
@@ -1782,7 +1814,9 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                     );
                   },
                 ),
-              ),
+              );
+            },
+          ),
               Positioned(
                 right: 12,
                 bottom:
@@ -1820,37 +1854,56 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
         );
 
         // **VISIT NOW PROTECTION: Show button when position >= showAtSeconds**
-        final int linkShowAtSeconds = video.validLinks.isNotEmpty
-            ? video.validLinks.map((l) => l.showAtSeconds).reduce((a, b) => a < b ? a : b)
-            : 0;
-
         final visitNowButton = video.hasLink
-            ? ValueListenableBuilder<VideoPlayerValue>(
-                valueListenable: (controller != null &&
-                        SharedVideoControllerPool().isControllerValid(controller))
-                    ? controller
-                    : ValueNotifier(const VideoPlayerValue.uninitialized()),
-                builder: (context, val, _) {
-                  if (val.position.inSeconds < linkShowAtSeconds) {
-                    return const SizedBox.shrink();
+            ? ValueListenableBuilder<bool>(
+                valueListenable: linkRevealedVN,
+                builder: (context, isRevealed, _) {
+                  if (controller != null &&
+                      SharedVideoControllerPool().isControllerValid(controller) &&
+                      !isRevealed) {
+                    if (controller.value.position.inSeconds >= linkShowAtSeconds) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) linkRevealedVN.value = true;
+                      });
+                    }
                   }
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      left: 16,
-                      bottom: bottomPadding + 16,
-                    ),
-                    child: SizedBox(
-                      width: (_screenWidth ?? MediaQuery.of(context).size.width) *
-                          0.75,
-                      child: FeedVisitNowButton(
-                        video: video,
-                        url: video.validLinks.isNotEmpty
-                            ? video.validLinks.first.url
-                            : (video.link ?? ''),
-                        variant: AppButtonVariant.secondary,
-                        size: AppButtonSize.small,
-                      ),
-                    ),
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.0, 0.4),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: FadeTransition(
+                          opacity: animation,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: isRevealed
+                        ? Padding(
+                            key: const ValueKey('visit_now_btn_pad'),
+                            padding: EdgeInsets.only(
+                              left: 16,
+                              bottom: bottomPadding + 16,
+                            ),
+                            child: SizedBox(
+                              width: (_screenWidth ?? MediaQuery.of(context).size.width) *
+                                  0.75,
+                              child: FeedVisitNowButton(
+                                video: video,
+                                url: video.validLinks.isNotEmpty
+                                    ? video.validLinks.first.url
+                                    : (video.link ?? ''),
+                                variant: AppButtonVariant.secondary,
+                                size: AppButtonSize.small,
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(key: ValueKey('visit_now_empty')),
                   );
                 },
               )
@@ -1887,7 +1940,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
           currentIndex: _currentIndex,
           controller: controller,
           overlayContent: overlayContent,
-          visitNowButton: visitNowButton,
+          linkRevealedVN: linkRevealedVN,
           activeQuizVN: _activeQuizVN,
           forceShowNotifier: forceShowNotifier,
           cinemaModeVN: _cinemaModeVN,
@@ -2194,9 +2247,10 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
   /// **PAUSE AD: Show ad on pause — no auto-hide, hides only when video plays**
   void _showPauseAd(int index) {
     if (index >= _videos.length) return;
+    final videoId = _videos[index].id;
+    if (_dismissedPauseAdVideoIds.contains(videoId)) return;
     final carouselAd = _carouselAdManager.getCarouselAdForIndex(index);
     if (carouselAd == null || carouselAd.slides.isEmpty) return;
-    final videoId = _videos[index].id;
     _getOrCreateNotifier<bool>(_showPauseAdOverlayPerVideoVN, videoId, false)
         .value = true;
   }
@@ -2215,6 +2269,12 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
   }
 
   Widget _buildLongPressAdContent(int index, {bool isPauseAd = false}) {
+    if (index >= _videos.length) return const SizedBox.shrink();
+    final videoId = _videos[index].id;
+    if (_dismissedPauseAdVideoIds.contains(videoId)) {
+      return const SizedBox.shrink();
+    }
+
     final carouselAd = _carouselAdManager.getCarouselAdForIndex(index);
     if (carouselAd == null || carouselAd.slides.isEmpty) {
       return const SizedBox.shrink();
@@ -2222,111 +2282,59 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
 
     final slide = carouselAd.slides.first;
     final imageUrl = slide.thumbnailUrl ?? slide.mediaUrl;
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-    return Stack(
-      children: [
-        // Circular ad image - slightly left, vertically centered, with popup animation
-        Positioned(
-          left: 40,
-          top: 0,
-          bottom: 0,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 350),
-              curve: Curves.elasticOut,
-              builder: (context, value, child) {
-                return Transform.scale(
-                  scale: value,
-                  child: Opacity(
-                    opacity: value.clamp(0.0, 1.0),
-                    child: child,
-                  ),
-                );
-              },
-              child: GestureDetector(
-                onTap: () async {
-                  _cinemaModeVN.value = false;
-                  _hidePauseAdOverlay();
+    return PausePopAdOverlay(
+      imageUrl: imageUrl,
+      onTap: () async {
+        _cinemaModeVN.value = false;
+        _hidePauseAdOverlay(videoId: videoId);
 
-                  // **NEW: Track popup ad click**
-                  if (index < _videos.length) {
-                    final video = _videos[index];
-                    final userData = await _authService.getUserData();
-                    if (userData != null &&
-                        userData['id'] != video.uploader.id) {
-                      try {
-                        await _adImpressionService.trackCarouselAdClick(
-                          videoId: video.id,
-                          adId: carouselAd.id,
-                          userId: userData['id'],
-                        );
-                      } catch (e) {
-                        AppLogger.log('❌ Error tracking popup ad click: $e');
-                      }
-                    }
-                  }
+        // **NEW: Track popup ad click**
+        if (index < _videos.length) {
+          final video = _videos[index];
+          final userData = await _authService.getUserData();
+          if (userData != null &&
+              userData['id'] != video.uploader.id) {
+            try {
+              await _adImpressionService.trackCarouselAdClick(
+                videoId: video.id,
+                adId: carouselAd.id,
+                userId: userData['id'],
+              );
+            } catch (e) {
+              AppLogger.log('❌ Error tracking popup ad click: $e');
+            }
+          }
+        }
 
-                  // Prioritize external navigation if URL is available
-                  if (carouselAd.callToActionUrl.isNotEmpty) {
-                    AppLogger.log(
-                        '🔗 LongPressOverlay: Launching URL: ${carouselAd.callToActionUrl}');
-                    _launchExternalUrl(carouselAd.callToActionUrl);
-                    return;
-                  }
+        // Prioritize external navigation if URL is available
+        if (carouselAd.callToActionUrl.isNotEmpty) {
+          AppLogger.log(
+              '🔗 LongPressOverlay: Launching URL: ${carouselAd.callToActionUrl}');
+          _launchExternalUrl(carouselAd.callToActionUrl);
+          return;
+        }
 
-                  // Fallback: Transition to carousel ad page (Existing logic)
-                  if (_videos.isNotEmpty && index < _videos.length) {
-                    final videoId = _videos[index].id;
-                    AppLogger.log(
-                        '🖱️ LongPressOverlay: Tapped for video $videoId (Fallback to feed)');
+        // Fallback: Transition to carousel ad page (Existing logic)
+        if (_videos.isNotEmpty && index < _videos.length) {
+          AppLogger.log(
+              '🖱️ LongPressOverlay: Tapped for video $videoId (Fallback to feed)');
 
-                    if (_carouselAdManager.getTotalCarouselAds() > 0) {
-                      if (_currentHorizontalPage.containsKey(videoId)) {
-                        _currentHorizontalPage[videoId]!.value = 1;
-                      }
-                    }
-                  }
-                },
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            AppColors.backgroundPrimary.withValues(alpha: 0.5),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      width: 70,
-                      height: 70,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 140,
-                      maxWidthDiskCache: 140,
-                      errorWidget: (context, url, error) {
-                        return Container(
-                          color: AppColors.borderPrimary,
-                          child: const Icon(Icons.ad_units,
-                              color: AppColors.white, size: 30),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+          if (_carouselAdManager.getTotalCarouselAds() > 0) {
+            if (_currentHorizontalPage.containsKey(videoId)) {
+              _currentHorizontalPage[videoId]!.value = 1;
+            }
+          }
+        }
+      },
+      onDismiss: () {
+        AppLogger.log('🚫 Pause pop ad dismissed by user for video $videoId');
+        _dismissedPauseAdVideoIds.add(videoId);
+        _hidePauseAdOverlay(videoId: videoId);
+      },
     );
   }
 
@@ -2577,7 +2585,7 @@ class _YugOverlayAutoHideHost extends StatefulWidget {
   final int currentIndex;
   final VideoPlayerController controller;
   final Widget overlayContent;
-  final Widget visitNowButton;
+  final ValueNotifier<bool> linkRevealedVN;
   final ValueNotifier<QuizModel?> activeQuizVN;
   final ValueNotifier<bool> forceShowNotifier;
   final ValueNotifier<bool> cinemaModeVN;
@@ -2594,7 +2602,7 @@ class _YugOverlayAutoHideHost extends StatefulWidget {
     required this.currentIndex,
     required this.controller,
     required this.overlayContent,
-    required this.visitNowButton,
+    required this.linkRevealedVN,
     required this.activeQuizVN,
     required this.forceShowNotifier,
     required this.cinemaModeVN,
@@ -2619,10 +2627,29 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
   void initState() {
     super.initState();
     _wasPlaying = _safeIsPlaying();
+    _checkLinkReveal();
     widget.controller.addListener(_handleControllerChange);
     // If already playing when widget mounts, start the 3-second auto-hide timer
     if (_wasPlaying) {
       _startAutoHideTimer();
+    }
+  }
+
+  void _checkLinkReveal() {
+    if (widget.video.hasLink && !widget.linkRevealedVN.value) {
+      final int minShow = widget.video.validLinks.isNotEmpty
+          ? widget.video.validLinks
+              .map((l) => l.showAtSeconds)
+              .reduce((a, b) => a < b ? a : b)
+          : 0;
+      try {
+        if (!SharedVideoControllerPool()
+            .isControllerDisposed(widget.controller)) {
+          if (widget.controller.value.position.inSeconds >= minShow) {
+            widget.linkRevealedVN.value = true;
+          }
+        }
+      } catch (_) {}
     }
   }
 
@@ -2639,6 +2666,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
   }
 
   void _handleControllerChange() {
+    _checkLinkReveal();
     final bool isPlaying = _safeIsPlaying();
     if (isPlaying != _wasPlaying) {
       _wasPlaying = isPlaying;
@@ -2682,6 +2710,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
       _autoHideTimer?.cancel();
       _wasPlaying = _safeIsPlaying();
       _isAutoHideExpired = false;
+      _checkLinkReveal();
       widget.controller.addListener(_handleControllerChange);
       if (_wasPlaying) {
         _startAutoHideTimer();
@@ -2777,35 +2806,66 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (widget.video.hasLink)
-                              ValueListenableBuilder<VideoPlayerValue>(
-                                valueListenable: widget.controller,
-                                builder: (context, val, _) {
-                                  final int minShow = widget.video.validLinks.isNotEmpty
-                                      ? widget.video.validLinks.map((l) => l.showAtSeconds).reduce((a, b) => a < b ? a : b)
-                                      : 0;
-                                  if (val.position.inSeconds < minShow) {
-                                    return const SizedBox.shrink();
+                              ValueListenableBuilder<bool>(
+                                valueListenable: widget.linkRevealedVN,
+                                builder: (context, isRevealed, _) {
+                                  if (!isRevealed) {
+                                    return const SizedBox.shrink(
+                                      key: ValueKey('visit_now_empty'),
+                                    );
                                   }
-                                  return FeedVisitNowButton(
-                                    video: widget.video,
-                                    url: widget.video.validLinks.isNotEmpty
-                                        ? widget.video.validLinks.first.url
-                                        : (widget.video.link ?? ''),
-                                    variant: AppButtonVariant.secondary,
-                                    size: AppButtonSize.small,
+                                  return TweenAnimationBuilder<double>(
+                                    key: const ValueKey('visit_now_btn_anim'),
+                                    tween: Tween<double>(begin: 0.0, end: 1.0),
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                    builder: (context, opacity, child) =>
+                                        Opacity(opacity: opacity, child: child),
+                                    child: FeedVisitNowButton(
+                                      key: const ValueKey('visit_now_btn'),
+                                      video: widget.video,
+                                      url: widget.video.validLinks.isNotEmpty
+                                          ? widget.video.validLinks.first.url
+                                          : (widget.video.link ?? ''),
+                                      variant: AppButtonVariant.secondary,
+                                      size: AppButtonSize.small,
+                                      isFullWidth: true,
+                                    ),
                                   );
                                 },
                               ),
-                            if (isQuizVisible) ...[
-                              const SizedBox(height: 12.0),
-                              QuizOverlay(
-                                quiz: activeQuiz,
-                                isCompact: isCompact,
-                                onDismiss: widget.onDismissQuiz,
-                                onBack: widget.onBackQuiz,
-                                onAnswered: widget.onAnsweredQuiz,
-                              ),
-                            ],
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 350),
+                              curve: Curves.fastOutSlowIn,
+                              alignment: Alignment.topCenter,
+                              child: isQuizVisible
+                                  ? Padding(
+                                      key: const ValueKey('quiz_container_visible'),
+                                      padding: const EdgeInsets.only(top: 12.0),
+                                      child: AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 300),
+                                        transitionBuilder: (child, animation) => FadeTransition(
+                                          opacity: animation,
+                                          child: SlideTransition(
+                                            position: Tween<Offset>(
+                                              begin: const Offset(0.0, 0.2),
+                                              end: Offset.zero,
+                                            ).animate(animation),
+                                            child: child,
+                                          ),
+                                        ),
+                                        child: QuizOverlay(
+                                          key: ValueKey('quiz_${activeQuiz.question}'),
+                                          quiz: activeQuiz,
+                                          isCompact: isCompact,
+                                          onDismiss: widget.onDismissQuiz,
+                                          onBack: widget.onBackQuiz,
+                                          onAnswered: widget.onAnsweredQuiz,
+                                        ),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(key: ValueKey('quiz_container_hidden')),
+                            ),
                           ],
                         ),
                       ),

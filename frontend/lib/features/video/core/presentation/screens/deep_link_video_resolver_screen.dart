@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/core/data/services/video_service.dart';
-import 'package:vayug/features/video/core/presentation/screens/video_screen.dart';
-import 'package:vayug/features/video/vayu/presentation/screens/vayu_long_form_player_screen.dart';
 import 'package:vayug/shared/services/deep_link_playback_gate.dart';
+import 'package:vayug/shared/services/deep_link_service.dart';
+import 'package:vayug/features/auth/data/services/authservices.dart';
+import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 
 /// Resolves a shared video before choosing a player.
 ///
-/// A Vayu video must never fall back to the Yug player if metadata is slow or
-/// unavailable, so this screen stays in a recoverable loading/error state
-/// until the content type is known.
+/// A minimal full-screen loading screen while metadata is fetched, then
+/// seamlessly hands off navigation to the existing Yug or Vayu feed tab.
 class DeepLinkVideoResolverScreen extends StatefulWidget {
   final String videoId;
   final Duration? initialPosition;
@@ -65,7 +65,7 @@ class _DeepLinkVideoResolverScreenState
       if (!mounted || !DeepLinkPlaybackGate.isCurrent(widget.requestId)) {
         return;
       }
-      await _openTypedPlayer(video);
+      await _handOffToTab(video);
     } catch (error) {
       if (!mounted || !DeepLinkPlaybackGate.isCurrent(widget.requestId)) {
         return;
@@ -73,11 +73,14 @@ class _DeepLinkVideoResolverScreenState
       AppLogger.log(
         'DeepLinkResolver: Could not resolve ${widget.videoId}: $error',
       );
-      setState(() {
-        _isLoading = false;
-        _errorMessage =
-            'We could not load this shared video. Check your connection and try again.';
-      });
+      DeepLinkPlaybackGate.release(widget.requestId);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      final rootContext = AuthService.navigatorKey.currentContext;
+      if (rootContext != null && rootContext.mounted) {
+        VayuSnackBar.showError(rootContext, 'Video unavailable');
+      }
     }
   }
 
@@ -104,7 +107,7 @@ class _DeepLinkVideoResolverScreenState
     throw lastError ?? StateError('Video metadata was unavailable');
   }
 
-  Future<void> _openTypedPlayer(VideoModel video) async {
+  Future<void> _handOffToTab(VideoModel video) async {
     if (video.videoType != 'vayu' && video.videoType != 'yog') {
       throw StateError('Unsupported video type: ${video.videoType}');
     }
@@ -112,39 +115,21 @@ class _DeepLinkVideoResolverScreenState
     _isOpeningTarget = true;
     DeepLinkPlaybackGate.pauseAllPlayback();
 
-    final Route<void> targetRoute;
-    if (video.videoType == 'vayu') {
-      targetRoute = MaterialPageRoute<void>(
-        settings: const RouteSettings(name: '/vayu_video'),
-        builder: (_) => VayuLongFormPlayerScreen(
-          video: video,
-          initialPosition: widget.initialPosition,
-          sectionEnd: widget.sectionEnd,
-        ),
-      );
-    } else {
-      targetRoute = MaterialPageRoute<void>(
-        settings: const RouteSettings(name: '/yug_video'),
-        builder: (_) => VideoScreen(
-          initialVideos: [video],
-          initialVideoId: video.id,
-          videoType: 'yog',
-          startAtSeconds: widget.initialPosition?.inSeconds,
-          endAtSeconds: widget.sectionEnd?.inSeconds,
-        ),
-      );
-    }
-
     AppLogger.log(
-      'DeepLinkResolver: Opening ${video.videoType} player for ${video.id}',
+      'DeepLinkResolver: Navigating to ${video.videoType} tab for ${video.id}',
     );
 
-    await Navigator.of(context).push(targetRoute);
-    DeepLinkPlaybackGate.release(widget.requestId);
+    // Pop the resolver screen so the user is directly back on the main shell
+    Navigator.of(context).pop();
 
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    // Forward to DeepLinkService to route into existing tab without extra stack
+    DeepLinkService().handleResolvedVideo(
+      video,
+      initialPosition: widget.initialPosition,
+      sectionEnd: widget.sectionEnd,
+    );
+
+    DeepLinkPlaybackGate.release(widget.requestId);
   }
 
   void _close() {

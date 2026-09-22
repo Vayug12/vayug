@@ -144,38 +144,19 @@ class AppleHorizontalPageScrollPhysics extends ScrollPhysics {
 
   double _getTargetPage(
       ScrollMetrics position, Tolerance tolerance, double velocity) {
-    final double page = _getPage(position);
+    double page = _getPage(position);
 
-    // Accidental tap protection: finger must move at least 5% of viewport width
-    const double minDragForFling = 0.05;
-    // Fling velocity threshold: requires an intentional flick (> 250 px/s)
-    const double velocityThreshold = 250.0;
-    // Drag distance threshold: 15% screen width triggers page change on slow drag
-    const double distanceThreshold = 0.15;
-
-    final double floor = page.floorToDouble();
-    final double fraction = page - floor;
-
-    // Moving forward (to right-side page)
-    if (fraction <= 0.5) {
-      if (velocity > velocityThreshold && fraction >= minDragForFling) {
-        return floor + 1.0;
-      }
-      if (fraction >= distanceThreshold) {
-        return floor + 1.0;
-      }
-      return floor;
+    // Fling velocity threshold: an intentional flick commits to the page change
+    const double velocityThreshold = 180.0;
+    if (velocity < -velocityThreshold) {
+      // Swiping left / backward -> commit to previous page
+      page -= 0.5;
+    } else if (velocity > velocityThreshold) {
+      // Swiping right / forward -> commit to next page
+      page += 0.5;
     }
 
-    // Moving backward (to left-side page)
-    final double dragBackDistance = 1.0 - fraction;
-    if (velocity < -velocityThreshold && dragBackDistance >= minDragForFling) {
-      return floor;
-    }
-    if (dragBackDistance >= distanceThreshold) {
-      return floor;
-    }
-    return floor + 1.0;
+    return page.roundToDouble();
   }
 
   @override

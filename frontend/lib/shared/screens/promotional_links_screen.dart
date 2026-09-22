@@ -541,7 +541,7 @@ class _PromotionalLinkEditorScreenState extends State<PromotionalLinkEditorScree
       return;
     }
 
-    const effectiveTitle = 'Visit Now';
+    final effectiveTitle = UrlUtils.formatShortDomain(formattedUrl);
 
     final int maxSec = widget.videoDuration > 0 ? widget.videoDuration.floor() : 120;
     final result = LinkItemData(

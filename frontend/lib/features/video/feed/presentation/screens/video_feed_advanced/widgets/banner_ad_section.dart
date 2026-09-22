@@ -12,6 +12,7 @@ class BannerAdSection extends StatefulWidget {
   final VoidCallback? onVideoPause;
   final VoidCallback? onVideoResume;
   final IAdService? adService;
+  final VoidCallback? onClose;
 
   const BannerAdSection({
     Key? key,
@@ -21,6 +22,7 @@ class BannerAdSection extends StatefulWidget {
     this.onVideoPause,
     this.onVideoResume,
     this.adService,
+    this.onClose,
   }) : super(key: key);
 
   @override
@@ -86,6 +88,7 @@ class _BannerAdSectionState extends State<BannerAdSection>
       onVideoPause: widget.onVideoPause,
       onVideoResume: widget.onVideoResume,
       adService: widget.adService,
+      onClose: widget.onClose,
     );
   }
 

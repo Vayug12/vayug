@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
 import 'package:vayug/features/auth/data/services/authservices.dart';
 import 'package:flutter/material.dart';
+import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/core/presentation/screens/deep_link_video_resolver_screen.dart';
 import 'package:vayug/shared/services/deep_link_playback_gate.dart';
 
@@ -11,6 +12,31 @@ class DeepLinkService {
   static final DeepLinkService _instance = DeepLinkService._internal();
   factory DeepLinkService() => _instance;
   DeepLinkService._internal();
+
+  /// Registered by MainScreen to navigate seamlessly to Yug or Vayu tab
+  void Function(
+    VideoModel video, {
+    Duration? initialPosition,
+    Duration? sectionEnd,
+  })? onVideoResolved;
+
+  void handleResolvedVideo(
+    VideoModel video, {
+    Duration? initialPosition,
+    Duration? sectionEnd,
+  }) {
+    if (onVideoResolved != null) {
+      onVideoResolved!(
+        video,
+        initialPosition: initialPosition,
+        sectionEnd: sectionEnd,
+      );
+    } else {
+      AppLogger.log(
+        '⚠️ DeepLinkService: onVideoResolved callback not registered',
+      );
+    }
+  }
 
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;

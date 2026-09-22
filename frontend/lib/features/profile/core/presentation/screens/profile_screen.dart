@@ -47,6 +47,7 @@ import 'package:vayug/features/profile/core/presentation/widgets/referral_share_
 import 'package:vayug/features/profile/content/presentation/screens/profile_tabs/yug_grid_tab.dart';
 import 'package:vayug/features/profile/content/presentation/screens/profile_tabs/vayu_grid_tab.dart';
 import 'package:vayug/features/profile/content/presentation/screens/profile_tabs/about_user_tab.dart';
+import 'package:vayug/features/profile/core/presentation/widgets/profile_auth_debug_section.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 import 'package:vayug/features/auth/presentation/controllers/auth_flow.dart';
 import 'package:vayug/core/providers/auth_providers.dart';
@@ -148,11 +149,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     // **FIX: Always attempt initial load once during init**
     // This ensures data loads on first attempt without double-triggering
     _loadData();
-    // Load referral stats
-    _loadReferralStats();
-    _fetchVerifiedReferralStats();
-    // Red dot for subscribers the creator has not looked at yet
-    _refreshSubscribersBadge();
+
+    // Only load referral stats & subscriber badges for user's own profile
+    if (!_isLocalManager) {
+      _loadReferralStats();
+      _fetchVerifiedReferralStats();
+      _refreshSubscribersBadge();
+    }
 
     // NO SETSTATE NEEDED: The UI components that need the active tab index
     // use a ValueListenableBuilder for granular updates.
@@ -211,15 +214,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       _isLoading.value = false;
 
       if (_profileStateManager.userData != null) {
-        // Verify billing only after profile state exists. Until then the CTA
-        // stays hidden instead of briefly showing incorrect setup UI.
-        unawaited(_checkUpiIdStatus());
+        // Verify billing only for own profile to avoid unnecessary network calls
+        if (!_isLocalManager) {
+          unawaited(_checkUpiIdStatus());
+        }
         if (_profileStateManager.userVideos.isEmpty &&
             !_profileStateManager.isVideosLoading) {
           _loadVideos(forceRefresh: forceRefresh, silent: true)
               .catchError((_) {});
         }
-        _refreshEarningsData(forceRefresh: forceRefresh).catchError((e) {});
+        if (!_isLocalManager) {
+          _refreshEarningsData(forceRefresh: forceRefresh).catchError((e) {});
+        }
       }
     } catch (e) {
       AppLogger.log('❌ ProfileScreen: Error loading data: $e');
@@ -344,13 +350,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       // and earnings so the pull indicator reflects the real fresh state.
       await _profileStateManager.refreshData();
 
-      await Future.wait([
-        _loadReferralStats(),
-        _fetchVerifiedReferralStats(),
-        _checkUpiIdStatus(),
-      ]);
-
-      _refreshSubscribersBadge(force: true);
+      // Only refresh referral stats and UPI status for own profile
+      if (!_isLocalManager) {
+        await Future.wait([
+          _loadReferralStats(),
+          _fetchVerifiedReferralStats(),
+          _checkUpiIdStatus(),
+        ]);
+        _refreshSubscribersBadge(force: true);
+      }
 
       AppLogger.log('✅ ProfileScreen: Manual refresh completed');
       if (mounted) {
@@ -936,53 +944,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
   }
 
-  /// **DEBUG: Build a styled debug test button with label and subtitle**
-  Widget _buildDebugButton(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onPressed,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color.withValues(alpha: 0.15),
-          foregroundColor: color,
-          elevation: 0,
-          side: BorderSide(color: color.withValues(alpha: 0.4)),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          alignment: Alignment.centerLeft,
-        ),
-        onPressed: onPressed,
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: color)),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 10, color: color.withValues(alpha: 0.7))),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// Handle Add UPI ID button tap
   Future<void> _handleAddUpiId() async {
     await ProfileDialogsWidget.showHowToEarnDialog(
@@ -1282,123 +1243,59 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     final isViewingOwnProfile = _isOwnProfile(manager, authController);
 
-    // 1. Debug Token Refresh Test (Only in Debug Mode)
-    if (kDebugMode) {
+    // 1. Debug Token Refresh Test (Only in Debug Mode for own profile)
+    if (kDebugMode && isViewingOwnProfile) {
       slivers.add(
         SliverToBoxAdapter(
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.07),
-              border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.bug_report, color: Colors.amber, size: 14),
-                    SizedBox(width: 6),
-                    Text(
-                      'AUTH DEBUG TOOLS (debug only)',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          color: Colors.amber),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // --- Case 1: Normal Expiry ---
-                _buildDebugButton(
-                  context,
-                  icon: Icons.timer_off_outlined,
-                  label: 'Case 1: Expire Access Token',
-                  subtitle: 'Refresh token intact → should silently recover',
-                  color: Colors.amber[700]!,
-                  onPressed: () async {
-                    await _authService.debugExpireToken();
-                    if (!context.mounted) return;
-                    VayuSnackBar.showInfo(context,
-                        'Case 1: Access token expired. Watch logs for silent refresh...');
-                    _refreshData();
-                  },
-                ),
-                const SizedBox(height: 6),
-
-                // --- Case 2: Full Session Loss ---
-                _buildDebugButton(
-                  context,
-                  icon: Icons.no_encryption_outlined,
-                  label: 'Case 2: Full Session Loss',
-                  subtitle:
-                      'Both tokens gone → should show "Session Expired" screen',
-                  color: Colors.red[700]!,
-                  onPressed: () async {
-                    await _authService.debugFullSessionLoss();
-                    if (!context.mounted) return;
-                    VayuSnackBar.showInfo(context,
-                        'Case 2: Both tokens deleted. Watch for sign-in screen...');
-                    _refreshData();
-                  },
-                ),
-                const SizedBox(height: 6),
-
-                // --- Case 3: Rotation Mismatch ---
-                _buildDebugButton(
-                  context,
-                  icon: Icons.sync_problem_outlined,
-                  label: 'Case 3: Rotation Mismatch',
-                  subtitle:
-                      'Corrupt refresh token → backend rejects, Google fallback tested',
-                  color: Colors.deepOrange[700]!,
-                  onPressed: () async {
-                    await _authService.debugRotationMismatch();
-                    if (!context.mounted) return;
-                    VayuSnackBar.showInfo(context,
-                        'Case 3: Refresh token corrupted (stale). Watch for Google Silent Sign-In fallback...');
-                    _refreshData();
-                  },
-                ),
-              ],
-            ),
+          child: ProfileAuthDebugSection(
+            authService: _authService,
+            onRefresh: _refreshData,
           ),
         ),
       );
     }
 
     // 2. Profile Header
-    slivers.add(
-      SliverToBoxAdapter(
-        child: ValueListenableBuilder<int>(
-          valueListenable: _invitedCount,
-          builder: (context, invitedCount, _) {
-            return ValueListenableBuilder<bool?>(
-              valueListenable: _hasUpiId,
-              builder: (context, hasUpiId, _) => ProfileHeaderWidget(
-                isViewingOwnProfile: isViewingOwnProfile,
-                stateManager: manager,
-                hasUpiId: hasUpiId,
-                hasReferralBillingUnlock: invitedCount >= 2,
-                onProfilePhotoChange: _handleProfilePhotoChange,
-                onAddUpiId: _handleAddUpiId,
-                onReferFriends: _handleReferFriends,
-                onEarningsTap: _handleEarningsTap,
-                onSubscribersTap: _handleSubscribersTap,
-                onSaveProfile: _handleSaveProfile,
-                onCancelEdit: _handleCancelEdit,
-                onProfessionTap: isViewingOwnProfile
-                    ? () => _openProfessionPicker(manager)
-                    : null,
-              ),
-            );
-          },
+    if (isViewingOwnProfile) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: ValueListenableBuilder<int>(
+            valueListenable: _invitedCount,
+            builder: (context, invitedCount, _) {
+              return ValueListenableBuilder<bool?>(
+                valueListenable: _hasUpiId,
+                builder: (context, hasUpiId, _) => ProfileHeaderWidget(
+                  isViewingOwnProfile: true,
+                  stateManager: manager,
+                  hasUpiId: hasUpiId,
+                  hasReferralBillingUnlock: invitedCount >= 2,
+                  onProfilePhotoChange: _handleProfilePhotoChange,
+                  onAddUpiId: _handleAddUpiId,
+                  onReferFriends: _handleReferFriends,
+                  onEarningsTap: _handleEarningsTap,
+                  onSubscribersTap: _handleSubscribersTap,
+                  onSaveProfile: _handleSaveProfile,
+                  onCancelEdit: _handleCancelEdit,
+                  onProfessionTap: () => _openProfessionPicker(manager),
+                ),
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: ProfileHeaderWidget(
+            isViewingOwnProfile: false,
+            stateManager: manager,
+            hasUpiId: false,
+            hasReferralBillingUnlock: false,
+            onSubscribersTap: _handleSubscribersTap,
+          ),
+        ),
+      );
+    }
 
     slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 8)));
 

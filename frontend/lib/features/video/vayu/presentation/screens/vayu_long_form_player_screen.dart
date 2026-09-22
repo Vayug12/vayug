@@ -344,7 +344,7 @@ class _VayuLongFormPlayerScreenState
         final isLandscape = orientation == Orientation.landscape;
         _applyPlayerChrome(
           fullscreen: isLandscape || _isFullScreenManual,
-          immersive: isLandscape,
+          immersive: isLandscape || _isFullScreenManual,
         );
       }
     });
@@ -448,7 +448,7 @@ class _VayuLongFormPlayerScreenState
     final isLandscape = orientation == Orientation.landscape;
     _applyPlayerChrome(
       fullscreen: isLandscape || _isFullScreenManual,
-      immersive: isLandscape,
+      immersive: isLandscape || _isFullScreenManual,
     );
     _syncPictureInPictureState(force: true);
   }
@@ -481,6 +481,14 @@ class _VayuLongFormPlayerScreenState
   void _preparePictureInPictureSurface() {
     if (!mounted || _isInPictureInPicture) return;
     _capturePictureInPictureVideoId();
+    try {
+      final rootNav = Navigator.of(context, rootNavigator: true);
+      rootNav.popUntil((route) => route is PageRoute || route.isFirst);
+    } catch (_) {}
+    try {
+      final localNav = Navigator.of(context);
+      localNav.popUntil((route) => route is PageRoute || route.isFirst);
+    } catch (_) {}
     setState(() => _isInPictureInPicture = true);
     _lifecyclePaused = false;
     _playbackCoordinator.setAppLifecycle(true);
@@ -1792,7 +1800,10 @@ class _VayuLongFormPlayerScreenState
     if (aspectRatio < 1.0) {
       // Vertical video: manual fullscreen, no rotation involved.
       setState(() => _isFullScreenManual = !_isFullScreenManual);
-      _applyPlayerChrome(fullscreen: _isFullScreenManual, immersive: false);
+      _applyPlayerChrome(
+        fullscreen: _isFullScreenManual,
+        immersive: _isFullScreenManual,
+      );
       showControlsVN.value = true;
       startHideControlsTimer(Orientation.portrait);
     } else {
@@ -2505,9 +2516,9 @@ class _VayuLongFormPlayerScreenState
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: _playerSystemUiOverlayStyle,
       child: PopScope(
-        canPop: !isLandscape,
+        canPop: !isLandscape && !_isFullScreenManual,
         onPopInvokedWithResult: (didPop, result) {
-          if (!didPop && isLandscape) {
+          if (!didPop && (isLandscape || _isFullScreenManual)) {
             _toggleFullScreen();
           } else if (didPop) {
             ref.read(mainControllerProvider).setBottomNavVisibility(true);
@@ -2589,10 +2600,11 @@ class _VayuLongFormPlayerScreenState
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final isPortrait = !isLandscape;
+    final isFull = isLandscape || _isFullScreenManual;
 
     return SafeArea(
-        top: isPortrait,
-        bottom: _isFullScreenManual && isPortrait,
+        top: isPortrait && !isFull,
+        bottom: false,
         left: false,
         right: false,
         child: VayuFeedItem(

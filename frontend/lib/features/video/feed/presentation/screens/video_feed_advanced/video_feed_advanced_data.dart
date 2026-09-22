@@ -22,9 +22,11 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
               '🚀 VideoFeedAdvanced: Using Stage 2 Pre-fetched videos (${preFetchedVideos.length})');
 
           if (mounted) {
+            final protectedVideos =
+                _protectWithPinnedDeepLink(preFetchedVideos);
             safeSetState(() {
-              _videos = preFetchedVideos;
-              _syncLikeStateWithModels(preFetchedVideos);
+              _videos = protectedVideos;
+              _syncLikeStateWithModels(protectedVideos);
               _currentIndex = 0;
               _hasMore = AppInitializationManager.instance.hasInitialVideosMore;
               _isLoading = false;
@@ -77,8 +79,10 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
               limit: _videosPerPage);
 
           if (galleryVideos.isNotEmpty && mounted) {
+            final protectedVideos =
+                _protectWithPinnedDeepLink(galleryVideos);
             safeSetState(() {
-              _videos = galleryVideos;
+              _videos = protectedVideos;
               _currentIndex = 0;
               _hasMore = galleryVideos.length >= _videosPerPage;
               _isLoading = false;
@@ -166,9 +170,11 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
             final rankedRetryVideos = await _rankVideosWithEngagement(
                 retryVideos,
                 preserveVideoKey: existingCurrentKey);
+            final protectedVideos =
+                _protectWithPinnedDeepLink(rankedRetryVideos);
             safeSetState(() {
-              _videos = rankedRetryVideos;
-              _syncLikeStateWithModels(rankedRetryVideos);
+              _videos = protectedVideos;
+              _syncLikeStateWithModels(protectedVideos);
               _currentIndex = 0;
               _currentPage = retryResponse['currentPage'] as int? ?? page;
               _hasMore = retryResponse['hasMore'] as bool? ?? false;
@@ -202,6 +208,9 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
       if (append) {
         safeSetState(() {
           if (newVideos.isNotEmpty) {
+            if (_pinnedDeepLinkVideo != null) {
+              newVideos.removeWhere((v) => v.id == _pinnedDeepLinkVideo!.id);
+            }
             _videos.addAll(newVideos);
             _syncLikeStateWithModels(newVideos);
             _cleanupOldVideosFromList();
@@ -215,9 +224,10 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
       } else {
         safeSetState(() {
           // Identify if we should reset the index
-          final bool shouldResetIndex = forceResetIndex || _videos.isEmpty;
+          final bool shouldResetIndex =
+              (forceResetIndex || _videos.isEmpty) && _pinnedDeepLinkVideo == null;
 
-          // **CRITICAL FIX: Only clear existing videos if we are resetting the index**
+          // **CRITICAL FIX: Only clear existing videos if we are resetting the index and no pinned deep link**
           if (shouldResetIndex) {
             _videos.clear();
             _controllerPool
@@ -228,11 +238,17 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
             }
           }
 
-          _videos = newVideos;
-          _syncLikeStateWithModels(newVideos);
+          final protectedVideos = _protectWithPinnedDeepLink(newVideos);
+          _videos = protectedVideos;
+          _syncLikeStateWithModels(protectedVideos);
 
-          // If not resetting, ensure current index is still valid
-          if (!shouldResetIndex) {
+          // If pinned deep link is present, keep current index locked to 0
+          if (_pinnedDeepLinkVideo != null) {
+            _currentIndex = 0;
+            if (_pageController.hasClients) {
+              _pageController.jumpToPage(0);
+            }
+          } else if (!shouldResetIndex) {
             if (_currentIndex >= _videos.length) {
               _currentIndex = _videos.isNotEmpty ? _videos.length - 1 : 0;
             }
@@ -402,11 +418,14 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
       _forceShowOverlayTimers.remove(videoId);
       _forceShowOverlayVN[videoId]?.dispose();
       _forceShowOverlayVN.remove(videoId);
+      _linkRevealedVN[videoId]?.dispose();
+      _linkRevealedVN.remove(videoId);
     }
   }
 
   Future<void> refreshVideos() async {
     if (_isLoading || _isRefreshing) return;
+    _pinnedDeepLinkVideo = null;
     await _stopAllVideosAndClearControllers();
     
     if (mounted) {
@@ -423,6 +442,11 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
       _nextCursor = null; // Reset cursor for fresh start
       await _loadVideos(
           page: 1, append: false, clearSession: true, forceResetIndex: true);
+      
+      _dismissedPauseAdVideoIds.clear();
+      for (final notifier in _bannerAdDismissedPerVideoVN.values) {
+        notifier.value = false;
+      }
       
       if (mounted) {
         safeSetState(() {

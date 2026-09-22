@@ -19,6 +19,7 @@ class FeedVisitNowButton extends StatefulWidget {
   final String campaign;
   final AppButtonVariant variant;
   final AppButtonSize size;
+  final bool isFullWidth;
 
   const FeedVisitNowButton({
     Key? key,
@@ -30,6 +31,7 @@ class FeedVisitNowButton extends StatefulWidget {
     this.campaign = 'creator_visit',
     this.variant = AppButtonVariant.secondary,
     this.size = AppButtonSize.small,
+    this.isFullWidth = true,
   }) : super(key: key);
 
   @override
@@ -162,6 +164,7 @@ class _FeedVisitNowButtonState extends State<FeedVisitNowButton> {
           : const Icon(Icons.open_in_new, size: 14, color: Colors.white),
       variant: widget.variant,
       size: widget.size,
+      isFullWidth: widget.isFullWidth,
     );
   }
 }

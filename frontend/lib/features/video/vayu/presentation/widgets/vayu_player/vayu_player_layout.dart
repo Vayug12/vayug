@@ -11,16 +11,30 @@ class VayuPlayerLayout {
   VayuPlayerLayout._();
 
   static const double portraitUtilityControlSize = 36;
-  static const double landscapeUtilityControlSize = 40;
-  static const double portraitUtilityIconSize = 20;
-  static const double landscapeUtilityIconSize = 20;
+  static const double landscapeUtilityControlSize = 38;
+  static const double portraitUtilityIconSize = 21;
+  static const double landscapeUtilityIconSize = 22;
 
   static const double landscapeTransportControlSize = 44;
   static const double landscapeTransportIconSize = 26;
-  static const double portraitPrimaryControlSize = 48;
+  static const double portraitPrimaryControlSize = 56;
   static const double landscapePrimaryControlSize = 64;
-  static const double portraitPrimaryIconSize = 30;
+  static const double portraitPrimaryIconSize = 32;
   static const double landscapePrimaryIconSize = 40;
+
+  /// Apple HIG minimum touch target dimension (44x44 pt).
+  static const double minTouchTarget = 44;
+
+  /// Apple-style pill container dimensions
+  static const double durationPillHeightPortrait = 28;
+  static const double durationPillHeightLandscape = 30;
+  static const double actionCapsuleHeightPortrait = 36;
+  static const double actionCapsuleHeightLandscape = 38;
+
+  /// Apple minimal pill styling tokens (GPU-lightweight)
+  static const Color pillBackgroundColor = Color(0x66000000); // 40% black
+  static const Color pillBorderColor = Color(0x29FFFFFF); // 16% white
+  static const double pillBorderWidth = 0.75;
 
   /// Keeps the painted control surface dense without changing its outer
   /// layout box or tap position.
@@ -52,14 +66,19 @@ class VayuPlayerLayout {
     BuildContext context, {
     required bool isFullScreen,
   }) {
-    final safePadding = MediaQuery.viewPaddingOf(context);
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    final left = math.max(viewPadding.left, padding.left);
+    final top = math.max(viewPadding.top, padding.top);
+    final right = math.max(viewPadding.right, padding.right);
+    final bottom = math.max(viewPadding.bottom, padding.bottom);
     final baseInset = isFullScreen ? AppSpacing.spacing6 : AppSpacing.spacing4;
 
     return EdgeInsets.fromLTRB(
-      safePadding.left + baseInset,
-      safePadding.top + baseInset,
-      safePadding.right + baseInset,
-      safePadding.bottom + baseInset,
+      left + baseInset,
+      top + baseInset,
+      right + baseInset,
+      bottom + baseInset,
     );
   }
 

@@ -304,7 +304,7 @@ class _MultiLinkEditorSheetState extends State<MultiLinkEditorSheet> {
 
       validLinks.add(LinkItemData(
         url: formattedUrl,
-        title: title,
+        title: UrlUtils.formatShortDomain(formattedUrl),
         showAtSeconds: c.showAtSeconds,
       ));
     }

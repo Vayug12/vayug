@@ -85,6 +85,13 @@
                 <data android:host="www.snehayog.site" />
                 <data android:pathPrefix="/r" />
             </intent-filter>
+
+            <!-- Handle shared video from external apps (WhatsApp, Gallery, etc.) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
         </activity>
 
         <!-- Override AppLovin fullscreen activity to keep it resizable

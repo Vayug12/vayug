@@ -36,17 +36,14 @@ extension _VideoFeedPiP on _VideoFeedAdvancedState {
 
   void _dismissOpenModalsAndOverlays() {
     // 1. Pop any open modal bottom sheet, dialog, or overlay routes
+    // ONLY pop popup routes (dialogs, bottom sheets). NEVER pop the PageRoute itself!
     try {
       final rootNav = Navigator.of(context, rootNavigator: true);
-      while (rootNav.canPop()) {
-        rootNav.pop();
-      }
+      rootNav.popUntil((route) => route is PageRoute || route.isFirst);
     } catch (_) {}
     try {
       final localNav = Navigator.of(context);
-      while (localNav.canPop()) {
-        localNav.pop();
-      }
+      localNav.popUntil((route) => route is PageRoute || route.isFirst);
     } catch (_) {}
 
     // 2. Clear snackbars

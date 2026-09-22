@@ -13,6 +13,7 @@ import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/shared/widgets/in_app_browser.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
+import 'package:vayug/features/ads/presentation/widgets/compact_ad_close_button.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Widget to display banner ads at the top of video feed
@@ -23,6 +24,7 @@ class BannerAdWidget extends StatefulWidget {
   final VoidCallback? onVideoPause;
   final VoidCallback? onVideoResume;
   final IAdService? adService;
+  final VoidCallback? onClose;
 
   const BannerAdWidget({
     Key? key,
@@ -32,6 +34,7 @@ class BannerAdWidget extends StatefulWidget {
     this.onVideoPause,
     this.onVideoResume,
     this.adService,
+    this.onClose,
   }) : super(key: key);
 
   @override
@@ -212,140 +215,162 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
                 borderRadius: BorderRadius.circular(12), // Rounded corners
                 clipBehavior:
                     Clip.hardEdge, // **FIX: Hard-edge clipping for isolation**
-                child: Row(
+                child: Stack(
                   children: [
-                    // 40% space for banner image
-                    Expanded(
-                      flex: 2,
-                      child: SizedBox(
-                        height: 50, // **REDUCED from 60 to match container**
-                        child: imageUrl.isNotEmpty
-                            ? RepaintBoundary(
-                                // **FIX: Isolate image with RepaintBoundary**
-                                child: Image(
-                                  key:
-                                      ValueKey('$imageUrl#$_imageRetryAttempt'),
-                                  image: _getCachedImageProvider(imageUrl),
-                                  fit: BoxFit.cover,
-                                  filterQuality: FilterQuality.low,
-                                  gaplessPlayback:
-                                      true, // **FIX: Gapless image to prevent flicker**
-                                  errorBuilder: (context, error, stackTrace) {
-                                    AppLogger.log(
-                                        '❌ BannerAdWidget: Failed to load image: $imageUrl, Error: $error');
-                                    _scheduleImageRetry(imageUrl);
-                                    return Container(
-                                      color: Colors.white10,
-                                      child: const Center(
-                                        child: Icon(Icons.broken_image_outlined,
-                                            color: Colors.white24, size: 16),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              )
-                            : Container(
-                                color: Colors.white10,
-                                width: double.infinity,
-                                height: double.infinity,
-                              ),
-                      ),
-                    ),
+                    Row(
+                      children: [
+                        // 40% space for banner image
+                        Expanded(
+                          flex: 2,
+                          child: SizedBox(
+                            height: 50, // **REDUCED from 60 to match container**
+                            child: imageUrl.isNotEmpty
+                                ? RepaintBoundary(
+                                    // **FIX: Isolate image with RepaintBoundary**
+                                    child: Image(
+                                      key:
+                                          ValueKey('$imageUrl#$_imageRetryAttempt'),
+                                      image: _getCachedImageProvider(imageUrl),
+                                      fit: BoxFit.cover,
+                                      filterQuality: FilterQuality.low,
+                                      gaplessPlayback:
+                                          true, // **FIX: Gapless image to prevent flicker**
+                                      errorBuilder: (context, error, stackTrace) {
+                                        AppLogger.log(
+                                            '❌ BannerAdWidget: Failed to load image: $imageUrl, Error: $error');
+                                        _scheduleImageRetry(imageUrl);
+                                        return Container(
+                                          color: Colors.white10,
+                                          child: const Center(
+                                            child: Icon(Icons.broken_image_outlined,
+                                                color: Colors.white24, size: 16),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : Container(
+                                    color: Colors.white10,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  ),
+                          ),
+                        ),
 
-                    // 60% space for title and CTA
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6), // more compact
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Ad title
-                            Expanded(
-                              child: Text(
-                                widget.adData['title'] ?? 'Sponsored Content',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10, // compact text
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.1, // Reduced line height
-                                ),
-                                maxLines:
-                                    3, // Increased from 2 to 3 to accommodate more text
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                        // 60% space for title and CTA
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            padding: EdgeInsets.only(
+                              left: 10,
+                              right: widget.onClose != null ? 24 : 10,
+                              top: 5,
+                              bottom: 5,
                             ),
-
-                            const SizedBox(height: 3),
-
-                            // Call to action button
-                            Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                GestureDetector(
-                                  onTap: () => _handleAdClick(context),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 3,
+                                // Ad title
+                                Expanded(
+                                  child: Text(
+                                    widget.adData['title'] ?? 'Sponsored Content',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10, // compact text
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.1, // Reduced line height
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: (() {
-                                      String label = 'Learn More';
-                                      final cta = widget.adData['callToAction'];
-                                      if (cta is Map) {
-                                        label = cta['label']?.toString() ??
-                                            'Learn More';
-                                      } else if (cta is String) {
-                                        label = cta;
-                                      }
-                                      // **FIX: Replace 'Shop Now' with 'Learn More'**
-                                      if (label.toUpperCase() == 'SHOP NOW') {
-                                        label = 'Learn More';
-                                      }
-
-                                      return Text(
-                                        label,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      );
-                                    })(),
+                                    maxLines:
+                                        3, // Increased from 2 to 3 to accommodate more text
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const Spacer(),
-                                // Small "Sponsored" label
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 5,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.3),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    'Sponsored',
-                                    style: TextStyle(
-                                      fontSize: 8,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                      letterSpacing: 0.3,
+
+                                const SizedBox(height: 3),
+
+                                // Call to action button
+                                Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => _handleAdClick(context),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: (() {
+                                          String label = 'Learn More';
+                                          final cta = widget.adData['callToAction'];
+                                          if (cta is Map) {
+                                            label = cta['label']?.toString() ??
+                                                'Learn More';
+                                          } else if (cta is String) {
+                                            label = cta;
+                                          }
+                                          // **FIX: Replace 'Shop Now' with 'Learn More'**
+                                          if (label.toUpperCase() == 'SHOP NOW') {
+                                            label = 'Learn More';
+                                          }
+
+                                          return Text(
+                                            label,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          );
+                                        })(),
+                                      ),
                                     ),
-                                  ),
+                                    const Spacer(),
+                                    // Small "Sponsored" label
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.3),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'Sponsored',
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (widget.onClose != null)
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: CompactAdCloseButton(
+                          size: 18,
+                          iconSize: 11,
+                          backgroundColor: Colors.black.withValues(alpha: 0.55),
+                          borderColor: Colors.white.withValues(alpha: 0.2),
+                          iconColor: Colors.white.withValues(alpha: 0.9),
+                          tooltip: 'Hide banner ad for this video',
+                          onTap: widget.onClose!,
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

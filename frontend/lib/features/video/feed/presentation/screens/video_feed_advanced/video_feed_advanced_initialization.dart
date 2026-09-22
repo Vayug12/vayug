@@ -156,16 +156,18 @@ extension _VideoFeedInitialization on _VideoFeedAdvancedState {
         if (bgVideos != null && bgVideos.isNotEmpty) {
           AppLogger.log(
               '🚀 VideoFeedAdvanced: Consuming background-fetched fresh videos');
-          _videos = List.from(bgVideos);
+          _videos = _protectWithPinnedDeepLink(List.from(bgVideos));
         } else {
           AppLogger.log(
               '⚠️ VideoFeedAdvanced: Background fetch unavailable or timed out, fallback to fresh load');
         }
       } else if (widget.initialVideos != null &&
           widget.initialVideos!.isNotEmpty) {
-        _videos = List.from(widget.initialVideos!);
+        _videos = _protectWithPinnedDeepLink(List.from(widget.initialVideos!));
         String? preserveKey;
-        if (widget.initialVideoId != null) {
+        if (_pinnedDeepLinkVideo != null) {
+          preserveKey = videoIdentityKey(_pinnedDeepLinkVideo!);
+        } else if (widget.initialVideoId != null) {
           for (final video in _videos) {
             if (video.id == widget.initialVideoId) {
               preserveKey = videoIdentityKey(video);
@@ -194,7 +196,7 @@ extension _VideoFeedInitialization on _VideoFeedAdvancedState {
               '⚠️ VideoFeedAdvanced: All ${_videos.length} initial videos were filtered out! Using original videos as fallback.');
         }
 
-        _videos = videosToUse;
+        _videos = _protectWithPinnedDeepLink(videosToUse);
 
         if (mounted) {
           // **FIX: Synchronize pagination state from manager**
@@ -206,7 +208,9 @@ extension _VideoFeedInitialization on _VideoFeedAdvancedState {
 
           // **FIX: Find correct index AFTER ranking (videos may have been reordered)**
           int correctIndex = 0;
-          if (widget.initialVideoId != null && _videos.isNotEmpty) {
+          if (_pinnedDeepLinkVideo != null) {
+            correctIndex = 0;
+          } else if (widget.initialVideoId != null && _videos.isNotEmpty) {
             final foundIndex = _videos.indexWhere(
               (v) => v.id == widget.initialVideoId,
             );

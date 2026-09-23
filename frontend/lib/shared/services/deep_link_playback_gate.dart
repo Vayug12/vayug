@@ -12,6 +12,7 @@ class DeepLinkPlaybackGate {
   static bool _isActive = false;
 
   static bool get isActive => _isActive;
+  static int get activeRequestId => _activeRequestId;
 
   static int beginResolution() {
     _activeRequestId++;
@@ -23,8 +24,8 @@ class DeepLinkPlaybackGate {
   static bool isCurrent(int requestId) =>
       _isActive && requestId == _activeRequestId;
 
-  static void release(int requestId) {
-    if (requestId == _activeRequestId) {
+  static void release([int? requestId]) {
+    if (requestId == null || requestId == _activeRequestId) {
       _isActive = false;
     }
   }

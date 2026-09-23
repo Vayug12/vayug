@@ -931,14 +931,19 @@ extension _VideoFeedPreload on _VideoFeedAdvancedState {
         final position = value.position;
 
         final sectionEnd = _dynamicDeepLinkEndAtSeconds ?? widget.endAtSeconds;
-        final targetVideoId = _dynamicDeepLinkVideoId ?? widget.initialVideoId;
+        final targetVideoId =
+            _dynamicDeepLinkVideoId ?? widget.initialVideoId ?? (_pinnedDeepLinkVideo?.id);
         final isSharedSection = sectionEnd != null &&
             targetVideoId == videoId &&
             sectionEnd > 0;
-        if (isSharedSection && position >= Duration(seconds: sectionEnd)) {
+        if (isSharedSection && !_hasShownSectionEndToast && position >= Duration(seconds: sectionEnd)) {
+          _hasShownSectionEndToast = true;
           controller.pause();
           _controllerStates[videoId] = false;
           _userPaused[videoId] = true;
+          if (mounted) {
+            VayuSnackBar.showInfo(context, 'Watch full video', duration: const Duration(seconds: 3));
+          }
           AppLogger.log('Shared Yug section reached its end at ${sectionEnd}s');
           return;
         }
@@ -1389,12 +1394,14 @@ extension _VideoFeedPreload on _VideoFeedAdvancedState {
       // **ENHANCED: Try to play immediately, with error handling**
       final controllerToPlay = controller;
       try {
-        _maybeApplyInitialStartSeek(videoId, controllerToPlay);
-        _playWithPolicy(controllerToPlay, 'feed immediate autoplay');
-        _ensureWakelockForVisibility();
-        _controllerStates[videoId] = true;
-        _userPaused[videoId] = false;
-        _pendingAutoplayAfterLogin = false;
+        _maybeApplyInitialStartSeek(videoId, controllerToPlay).then((_) {
+          if (!mounted) return;
+          _playWithPolicy(controllerToPlay, 'feed immediate autoplay');
+          _ensureWakelockForVisibility();
+          _controllerStates[videoId] = true;
+          _userPaused[videoId] = false;
+          _pendingAutoplayAfterLogin = false;
+        });
         
         // **NEW: Start view tracking with videoHash for immediate play**
         if (index < _videos.length) {

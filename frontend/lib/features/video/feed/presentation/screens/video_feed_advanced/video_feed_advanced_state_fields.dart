@@ -39,6 +39,7 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
 
   // Share links: the initial seek must run exactly once, on the shared video only
   bool _hasAppliedInitialStartSeek = false;
+  bool _hasShownSectionEndToast = false;
   String? _dynamicDeepLinkVideoId;
   int? _dynamicDeepLinkStartAtSeconds;
   int? _dynamicDeepLinkEndAtSeconds;

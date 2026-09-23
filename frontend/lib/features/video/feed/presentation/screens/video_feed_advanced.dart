@@ -64,6 +64,7 @@ import 'package:vayug/shared/managers/carousel_ad_manager.dart';
 import 'package:vayug/shared/services/connectivity_service.dart';
 import 'package:vayug/shared/services/local_gallery_service.dart';
 import 'package:vayug/shared/services/deep_link_playback_gate.dart';
+import 'package:vayug/shared/services/deep_link_service.dart';
 import 'package:vayug/shared/services/playback_coordinator.dart';
 import 'package:vayug/shared/navigation/app_route_observer.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
@@ -433,12 +434,14 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
           } catch (_) {}
           if (!_shouldAutoplayForContext('autoplay current immediate')) return;
           _pauseOtherLocalVideos(_videos[_currentIndex].id);
-          _maybeApplyInitialStartSeek(video.id, controller);
-          _playWithPolicy(controller, 'feed autoplay immediate');
-          _ensureWakelockForVisibility();
-          _controllerStates[video.id] = true;
-          _userPaused[video.id] = false;
-          _pendingAutoplayAfterLogin = false;
+          _maybeApplyInitialStartSeek(video.id, controller).then((_) {
+            if (!mounted) return;
+            _playWithPolicy(controller, 'feed autoplay immediate');
+            _ensureWakelockForVisibility();
+            _controllerStates[video.id] = true;
+            _userPaused[video.id] = false;
+            _pendingAutoplayAfterLogin = false;
+          });
 
           if (_currentIndex < _videos.length) {
             final currentVideo = _videos[_currentIndex];
@@ -570,8 +573,16 @@ class _VideoFeedAdvancedState extends ConsumerState<VideoFeedAdvanced>
 
   bool _shouldAutoplayForContext(String reason) {
     if (widget.isMainYugTab && DeepLinkPlaybackGate.isActive) {
-      AppLogger.log('AUTOPLAY[$reason]: Shared video link is resolving');
-      return false;
+      final currentVideo = _videos.isNotEmpty && _currentIndex >= 0 && _currentIndex < _videos.length
+          ? _videos[_currentIndex]
+          : null;
+      final isPlayingDeepLinkVideo = currentVideo != null &&
+          ((_pinnedDeepLinkVideo != null && _pinnedDeepLinkVideo!.id == currentVideo.id) ||
+           (_dynamicDeepLinkVideoId != null && _dynamicDeepLinkVideoId == currentVideo.id));
+      if (!isPlayingDeepLinkVideo) {
+        AppLogger.log('AUTOPLAY[$reason]: Shared video link is resolving (blocking random video)');
+        return false;
+      }
     }
 
     if (!_playbackCoordinator.canPlay(_playbackSession, reason: reason)) {

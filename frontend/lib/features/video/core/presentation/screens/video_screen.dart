@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/feed/presentation/screens/video_feed_advanced.dart';
 import 'package:vayug/features/video/core/presentation/managers/video_controller_manager.dart';
+import 'package:vayug/shared/services/deep_link_playback_gate.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
 
 class VideoScreen extends ConsumerStatefulWidget {
@@ -102,6 +103,10 @@ class VideoScreenState extends ConsumerState<VideoScreen> {
     // already been activated, muting the video it was about to play.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _flushPendingDeepLink();
+      if (DeepLinkPlaybackGate.isActive || _pendingDeepLinkVideo != null) {
+        AppLogger.log('🎬 VideoScreen: Suppressing premature forcePlayCurrent - deep link active or pending');
+        return;
+      }
       final state = _videoFeedKey.currentState;
       if (state != null) {
         try {
@@ -113,6 +118,10 @@ class VideoScreenState extends ConsumerState<VideoScreen> {
     // Some devices need a short delay for the first frame to attach
     Future.delayed(const Duration(milliseconds: 120), () {
       _flushPendingDeepLink();
+      if (DeepLinkPlaybackGate.isActive || _pendingDeepLinkVideo != null) {
+        AppLogger.log('🎬 VideoScreen: Suppressing delayed forcePlayCurrent - deep link active or pending');
+        return;
+      }
       final s = _videoFeedKey.currentState;
       if (s != null) {
         try {

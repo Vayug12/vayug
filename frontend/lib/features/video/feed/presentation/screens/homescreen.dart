@@ -381,23 +381,20 @@ class _MainScreenState extends ConsumerState<MainScreen>
       yugNav?.popUntil((route) => route.isFirst);
 
       // 3. Tell VideoScreenState to dynamically inject and play video at index 0
-      unawaited(() async {
-        // Poll for up to 3 seconds (60 attempts * 50ms) to ensure cold-start mounting finishes
-        for (int i = 0; i < 60; i++) {
-          final videoScreenState = _videoScreenKey.currentState;
-          if (videoScreenState != null) {
-            await videoScreenState.playDeepLinkVideo(
-              video,
-              startAtSeconds: initialPosition?.inSeconds,
-              endAtSeconds: sectionEnd?.inSeconds,
-            );
-            return;
-          }
-          await Future.delayed(const Duration(milliseconds: 50));
-          if (!mounted) return;
+      for (int i = 0; i < 60; i++) {
+        final videoScreenState = _videoScreenKey.currentState;
+        if (videoScreenState != null) {
+          await videoScreenState.playDeepLinkVideo(
+            video,
+            startAtSeconds: initialPosition?.inSeconds,
+            endAtSeconds: sectionEnd?.inSeconds,
+          );
+          return;
         }
-        AppLogger.log('❌ MainScreen: VideoScreenState not found for deep link after retry');
-      }());
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (!mounted) return;
+      }
+      AppLogger.log('❌ MainScreen: VideoScreenState not found for deep link after retry');
     }
   }
 
@@ -712,8 +709,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       key: _videoScreenKey,
                       initialVideos:
                           AppInitializationManager.instance.initialVideos,
-                      isMainYugTab:
-                          true, // **NEW: Mark as main feed for tab-active enforcement**
+                      isMainYugTab: true,
+                      startAtSeconds: DeepLinkService().pendingStartAtSeconds,
+                      endAtSeconds: DeepLinkService().pendingEndAtSeconds,
                     )),
                 _buildTabNavigator(1, VayuScreen(key: _vayuScreenKey)),
                 _buildTabNavigator(

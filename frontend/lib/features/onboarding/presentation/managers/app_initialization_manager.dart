@@ -11,6 +11,8 @@ import 'package:vayug/shared/services/notification_service.dart';
 import 'package:vayug/features/video/core/data/services/video_service.dart';
 import 'package:vayug/shared/services/hls_warmup_service.dart';
 import 'package:vayug/features/video/core/data/services/video_cache_proxy_service.dart';
+import 'package:vayug/shared/services/deep_link_service.dart';
+import 'package:vayug/shared/services/deep_link_playback_gate.dart';
 import 'dart:async'; // For unawaited;
 /// **AppInitializationManager**
 /// 
@@ -112,8 +114,52 @@ class AppInitializationManager {
       // Ensure Stage 1 (Firebase) completes quickly
       await stage1Future;
 
-      // Task A: Video fetching - Start in background immediately (unawaited)
-      unawaited(_fetchAndPreloadFirstVideos(videoService));
+      // Check if cold start was triggered by a deep link
+      Uri? initialUri;
+      try {
+        initialUri = await DeepLinkService()
+            .getInitialUri()
+            .timeout(const Duration(milliseconds: 300), onTimeout: () => null);
+      } catch (_) {}
+
+      String? deepLinkVideoId;
+      if (initialUri != null) {
+        deepLinkVideoId = DeepLinkService().extractVideoId(initialUri);
+        DeepLinkService().pendingStartAtSeconds =
+            DeepLinkService().parseTimestampSeconds(initialUri.queryParameters['t']);
+        DeepLinkService().pendingEndAtSeconds =
+            DeepLinkService().parseTimestampSeconds(initialUri.queryParameters['end']);
+      }
+
+      if (deepLinkVideoId != null && deepLinkVideoId.isNotEmpty) {
+        AppLogger.log('🔗 InitManager: Detected deep link on cold start: $deepLinkVideoId');
+        DeepLinkPlaybackGate.beginResolution();
+        try {
+          final targetVideo = await videoService.getVideoById(deepLinkVideoId);
+          if (targetVideo.videoType == 'yog') {
+            initialVideos = [targetVideo];
+            hasInitialVideosMore = true;
+            _initialVideosTimestamp = DateTime.now();
+            DeepLinkService().coldStartPreloadedVideo = targetVideo;
+            if (!_backgroundFetchCompleter.isCompleted) {
+              _backgroundFetchCompleter.complete(initialVideos);
+            }
+            AppLogger.log('✅ InitManager: Direct preload of cold-start deep link video successful');
+          } else {
+            // For Vayu, keep initialVideos empty so Yug doesn't play anything
+            if (!_backgroundFetchCompleter.isCompleted) {
+              _backgroundFetchCompleter.complete(null);
+            }
+          }
+        } catch (e) {
+          AppLogger.log('⚠️ InitManager: Failed to fetch deep link video $deepLinkVideoId: $e, falling back to feed');
+          DeepLinkPlaybackGate.release();
+          unawaited(_fetchAndPreloadFirstVideos(videoService));
+        }
+      } else {
+        // Task A: Video fetching - Start in background immediately (unawaited)
+        unawaited(_fetchAndPreloadFirstVideos(videoService));
+      }
 
       // **INSTANT BOOT: Stage 2 completes immediately after Stage 1**
       // We no longer block on _fastAuthGate (Google Silent Auth) or Server Pings

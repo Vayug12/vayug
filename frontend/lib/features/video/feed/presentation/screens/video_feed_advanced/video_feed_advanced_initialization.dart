@@ -163,7 +163,15 @@ extension _VideoFeedInitialization on _VideoFeedAdvancedState {
         }
       } else if (widget.initialVideos != null &&
           widget.initialVideos!.isNotEmpty) {
+        final coldVideo = DeepLinkService().coldStartPreloadedVideo;
+        if (coldVideo != null && widget.initialVideos!.any((v) => v.id == coldVideo.id)) {
+          _pinnedDeepLinkVideo = coldVideo;
+          _dynamicDeepLinkVideoId = coldVideo.id;
+          _dynamicDeepLinkStartAtSeconds = DeepLinkService().pendingStartAtSeconds;
+          _dynamicDeepLinkEndAtSeconds = DeepLinkService().pendingEndAtSeconds;
+        }
         _videos = _protectWithPinnedDeepLink(List.from(widget.initialVideos!));
+
         String? preserveKey;
         if (_pinnedDeepLinkVideo != null) {
           preserveKey = videoIdentityKey(_pinnedDeepLinkVideo!);

@@ -119,17 +119,18 @@ class _DeepLinkVideoResolverScreenState
       'DeepLinkResolver: Navigating to ${video.videoType} tab for ${video.id}',
     );
 
-    // Pop the resolver screen so the user is directly back on the main shell
-    Navigator.of(context).pop();
-
-    // Forward to DeepLinkService to route into existing tab without extra stack
-    DeepLinkService().handleResolvedVideo(
+    // Forward to DeepLinkService to route into existing tab and AWAIT playback preparation
+    await DeepLinkService().handleResolvedVideo(
       video,
       initialPosition: widget.initialPosition,
       sectionEnd: widget.sectionEnd,
     );
 
     DeepLinkPlaybackGate.release(widget.requestId);
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   void _close() {

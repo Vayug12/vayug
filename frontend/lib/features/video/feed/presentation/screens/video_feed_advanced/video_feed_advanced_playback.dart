@@ -51,8 +51,8 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
 
   /// Seeks the shared video to the `t` timestamp from a deep link before its
   /// first play. Runs at most once and only for the deep-linked video.
-  void _maybeApplyInitialStartSeek(
-      String videoId, VideoPlayerController controller) {
+  Future<void> _maybeApplyInitialStartSeek(
+      String videoId, VideoPlayerController controller) async {
     final startSeconds =
         _dynamicDeepLinkStartAtSeconds ?? widget.startAtSeconds;
     if (startSeconds == null ||
@@ -60,11 +60,11 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
         _hasAppliedInitialStartSeek) {
       return;
     }
-    final targetVideoId = _dynamicDeepLinkVideoId ?? widget.initialVideoId;
+    final targetVideoId =
+        _dynamicDeepLinkVideoId ?? widget.initialVideoId ?? (_pinnedDeepLinkVideo?.id);
     if (targetVideoId != null && videoId != targetVideoId) {
       return;
     }
-    _hasAppliedInitialStartSeek = true;
 
     var target = Duration(seconds: startSeconds);
     final duration = controller.value.duration;
@@ -72,7 +72,8 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
       target = duration - const Duration(milliseconds: 500);
     }
     try {
-      unawaited(controller.seekTo(target));
+      await controller.seekTo(target);
+      _hasAppliedInitialStartSeek = true;
       AppLogger.log(
           '⏩ VideoFeedAdvanced: Applied shared-link start position ${target.inSeconds}s for $videoId');
     } catch (e) {
@@ -91,6 +92,7 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
     _dynamicDeepLinkStartAtSeconds = startAtSeconds;
     _dynamicDeepLinkEndAtSeconds = endAtSeconds;
     _hasAppliedInitialStartSeek = false;
+    _hasShownSectionEndToast = false;
 
     // Pause current playing video
     _pauseCurrentVideo();
@@ -118,8 +120,13 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
     SharedVideoControllerPool()
         .pinVideo(video.id, sessionId: _playbackSession.id);
 
+    // Preload controller for index 0 and seek to start position before force play
+    await _preloadVideo(0);
+    final controller = _controllerPool[video.id];
+    if (controller != null && controller.value.isInitialized) {
+      await _maybeApplyInitialStartSeek(video.id, controller);
+    }
     forcePlayCurrent();
-    unawaited(_preloadVideo(0));
   }
 
   void forcePlayCurrent() {
@@ -152,16 +159,18 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
       if (!_shouldAutoplayForContext('forcePlayCurrent')) return;
       _pauseOtherLocalVideos(videoId);
       _lifecyclePaused = false;
-      _maybeApplyInitialStartSeek(videoId, controller);
-      _playWithPolicy(controller, 'feed force play');
-      
-      safeSetState(() {
-        _controllerStates[videoId] = true;
-        _userPaused[videoId] = false; // **Ensure user paused is reset**
-        _getOrCreateNotifier<bool>(_userPausedVN, videoId, false);
+      _maybeApplyInitialStartSeek(videoId, controller).then((_) {
+        if (!mounted) return;
+        _playWithPolicy(controller, 'feed force play');
+        
+        safeSetState(() {
+          _controllerStates[videoId] = true;
+          _userPaused[videoId] = false; // **Ensure user paused is reset**
+          _getOrCreateNotifier<bool>(_userPausedVN, videoId, false);
+        });
+        
+        _ensureWakelockForVisibility();
       });
-      
-      _ensureWakelockForVisibility();
       return;
     }
 
@@ -181,16 +190,18 @@ extension _VideoFeedPlayback on _VideoFeedAdvancedState {
         if (!_shouldAutoplayForContext('forcePlayCurrent preload')) return;
         _pauseOtherLocalVideos(videoId);
         _lifecyclePaused = false;
-        _maybeApplyInitialStartSeek(videoId, c);
-        _playWithPolicy(c, 'feed force play after preload');
-        
-        safeSetState(() {
-          _controllerStates[videoId] = true;
-          _userPaused[videoId] = false;
-          _getOrCreateNotifier<bool>(_userPausedVN, videoId, false);
+        _maybeApplyInitialStartSeek(videoId, c).then((_) {
+          if (!mounted) return;
+          _playWithPolicy(c, 'feed force play after preload');
+          
+          safeSetState(() {
+            _controllerStates[videoId] = true;
+            _userPaused[videoId] = false;
+            _getOrCreateNotifier<bool>(_userPausedVN, videoId, false);
+          });
+          
+          _ensureWakelockForVisibility();
         });
-        
-        _ensureWakelockForVisibility();
       }
     });
   }

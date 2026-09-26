@@ -11,6 +11,7 @@ class VayuMetadataSection extends StatelessWidget {
   final bool isPortrait;
   final VoidCallback onShare;
   final VoidCallback onSave;
+  final VoidCallback? onComments;
   final VoidCallback onVisitLink;
   final VoidCallback onMoreOptions;
   final VoidCallback onEpisodes;
@@ -23,6 +24,7 @@ class VayuMetadataSection extends StatelessWidget {
     this.isPortrait = true,
     required this.onShare,
     required this.onSave,
+    this.onComments,
     required this.onVisitLink,
     required this.onMoreOptions,
     required this.onEpisodes,
@@ -98,6 +100,21 @@ class VayuMetadataSection extends StatelessWidget {
                   label: video.isSaved ? 'Saved' : 'Save',
                   labelColor: video.isSaved ? AppColors.primary : null,
                 ),
+                if (onComments != null) ...[
+                  SizedBox(width: AppSpacing.spacing2),
+                  _buildActionButton(
+                    context,
+                    icon: Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                      size: 18,
+                    ),
+                    onPressed: onComments!,
+                    label: video.commentsCount > 0
+                        ? '${video.commentsCount}'
+                        : 'Comments',
+                  ),
+                ],
                 SizedBox(width: AppSpacing.spacing2),
                 _buildActionButton(
                   context,

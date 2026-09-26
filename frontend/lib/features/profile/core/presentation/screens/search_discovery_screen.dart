@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/core/design/radius.dart';
@@ -9,12 +9,12 @@ import 'package:vayug/features/profile/search/data/models/search_suggestions.dar
 import 'package:vayug/features/profile/search/data/services/search_service_impl.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/profile/core/presentation/widgets/category_tile_widget.dart';
-import 'package:vayug/shared/utils/app_logger.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:vayug/features/profile/core/presentation/screens/profile_screen.dart';
 import 'package:vayug/features/video/vayu/presentation/screens/vayu_long_form_player_screen.dart';
 import 'package:vayug/features/video/core/presentation/screens/video_screen.dart';
-import 'package:vayug/shared/widgets/unified_video_card.dart';
+import 'package:vayug/shared/utils/app_logger.dart';
+import 'package:vayug/shared/utils/format_utils.dart';
+import 'package:vayug/shared/widgets/follow_button_widget.dart';
 import 'package:vayug/shared/widgets/vayu_video_card.dart';
 
 class SearchDiscoveryScreen extends StatefulWidget {
@@ -22,18 +22,6 @@ class SearchDiscoveryScreen extends StatefulWidget {
   ///
   /// Pass any [ISearchService] implementation here.
   /// Defaults to [SearchServiceImpl] (HTTP backend) when not provided.
-  ///
-  /// Examples:
-  /// ```dart
-  /// // Normal usage — no change needed at call sites
-  /// const SearchDiscoveryScreen()
-  ///
-  /// // Swap to AI search tomorrow — zero screen changes
-  /// SearchDiscoveryScreen(searchService: AiSearchServiceImpl())
-  ///
-  /// // Unit test — no real HTTP calls
-  /// SearchDiscoveryScreen(searchService: MockSearchService())
-  /// ```
   final ISearchService searchService;
 
   const SearchDiscoveryScreen({
@@ -77,10 +65,7 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
   late final ISearchService _searchService = widget.searchService;
 
   String _query = '';
-  Timer? _debounceTimer;
   bool _isSearching = false;
-
-  SearchSuggestions _suggestions = SearchSuggestions.empty;
 
   bool _showResults = false;
   List<UserModel> _resultCreators = [];
@@ -99,55 +84,39 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
-    _debounceTimer?.cancel();
     super.dispose();
   }
 
+  /// Only updates the local text state — NO network requests on typing!
   void _onSearchChanged(String value) {
     setState(() {
       _query = value;
-      _showResults = false;
-    });
-
-    if (value.trim().length < 2) {
-      setState(() => _suggestions = SearchSuggestions.empty);
-      return;
-    }
-
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-      _fetchSuggestions(value);
-    });
-  }
-
-  Future<void> _fetchSuggestions(String q) async {
-    setState(() => _isSearching = true);
-    try {
-      final result = await _searchService.getSuggestions(q);
-      if (mounted && _query == q) {
-        setState(() {
-          _suggestions = result;
-          _isSearching = false;
-        });
+      if (value.trim().isEmpty) {
+        _showResults = false;
+        _resultCreators = [];
+        _resultVideos = [];
       }
-    } catch (e) {
-      AppLogger.log('❌ SearchDiscovery: Error fetching suggestions: $e');
-      if (mounted) setState(() => _isSearching = false);
-    }
+    });
   }
 
-  Future<void> _performSearch() async {
-    if (_query.trim().isEmpty) return;
+  /// Triggers network search queries only when the user explicitly hits search.
+  Future<void> _performSearch([String? targetQuery]) async {
+    final q = (targetQuery ?? _searchController.text).trim();
+    if (q.isEmpty) return;
 
     _searchFocusNode.unfocus();
     setState(() {
+      _query = q;
+      if (_searchController.text != q) {
+        _searchController.text = q;
+      }
       _isSearching = true;
       _showResults = true;
     });
 
     try {
-      final creators = await _searchService.searchCreators(_query);
-      final videos = await _searchService.searchVideos(_query);
+      final creators = await _searchService.searchCreators(q);
+      final videos = await _searchService.searchVideos(q);
 
       if (mounted) {
         setState(() {
@@ -202,6 +171,7 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
         controller: _searchController,
         focusNode: _searchFocusNode,
         autofocus: false,
+        textInputAction: TextInputAction.search,
         onChanged: _onSearchChanged,
         onSubmitted: (_) => _performSearch(),
         style: AppTypography.bodyLarge,
@@ -210,8 +180,11 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
           hintStyle:
               AppTypography.bodyMedium.copyWith(color: AppColors.textTertiary),
           border: InputBorder.none,
-          prefixIcon:
-              const Icon(Icons.search, color: AppColors.textTertiary, size: 20),
+          prefixIcon: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _performSearch(),
+            child: const Icon(Icons.search, color: AppColors.textTertiary, size: 20),
+          ),
           suffixIcon: _query.isNotEmpty
               ? GestureDetector(
                   onTap: () {
@@ -229,9 +202,27 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
   }
 
   Widget _buildBody() {
-    if (_query.isEmpty) return _buildDiscoveryView();
-    if (_showResults) return _buildResultsView();
-    return _buildSuggestionsView();
+    if (!_showResults) {
+      if (_query.trim().isNotEmpty) {
+        // Shown while typing without triggering network search
+        return ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            ListTile(
+              leading: const Icon(Icons.search, color: AppColors.textTertiary),
+              title: Text(
+                _query.trim(),
+                style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
+              ),
+              trailing: const Icon(Icons.north_west, color: AppColors.textTertiary, size: 18),
+              onTap: () => _performSearch(),
+            ),
+          ],
+        );
+      }
+      return _buildDiscoveryView();
+    }
+    return _buildResultsView();
   }
 
   Widget _buildDiscoveryView() {
@@ -257,31 +248,12 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
               onTap: () {
                 _searchController.text = cat['title'];
                 _onSearchChanged(cat['title']);
-                _performSearch();
+                _performSearch(cat['title']);
               },
             );
           },
         ),
         const SizedBox(height: 32),
-      ],
-    );
-  }
-
-  Widget _buildSuggestionsView() {
-    if (_isSearching &&
-        _suggestions.creators.isEmpty &&
-        _suggestions.videos.isEmpty) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
-    }
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        if (_suggestions.creators.isNotEmpty)
-          ..._suggestions.creators.map((u) => _buildCreatorTile(u)),
-        if (_suggestions.videos.isNotEmpty)
-          ..._suggestions.videos.map((v) => _buildVideoSuggestionTile(v)),
       ],
     );
   }
@@ -300,126 +272,364 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
     final yog = _resultVideos.where((v) => v.videoType != 'vayu').toList();
 
     return ListView(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.only(top: 8, bottom: 48),
       children: [
+        // 1. YouTube-style Account / Channel Card
         if (_resultCreators.isNotEmpty) ...[
-          ..._resultCreators.take(5).map((u) => _buildCreatorTile(u)),
-          if (_resultCreators.length > 5)
-            TextButton(
-              onPressed: () {
-                // Future: Show all creators screen
-              },
-              child: const Text('Show all creators'),
+          ..._resultCreators.take(3).map((u) => _buildYouTubeChannelCard(u)),
+          if (_resultCreators.length > 3)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextButton(
+                onPressed: () {
+                  // Future: Show all creators screen
+                },
+                child: const Text('Show more creators'),
+              ),
             ),
-        ],
-        if (vayu.isNotEmpty) ...[
-          SizedBox(
-            height: 275,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              itemCount: vayu.length,
-              itemBuilder: (context, index) {
-                final video = vayu[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12.0),
-                  child: SizedBox(
-                    width: 280,
-                    child: VayuVideoCard(
-                      video: video,
-                      onTap: () => _navigateToVideo(video, _resultVideos),
-                    ),
-                  ),
-                );
-              },
-            ),
+          const Divider(
+            color: Color(0x1FFFFFFF),
+            height: 24,
+            thickness: 0.8,
+            indent: 16,
+            endIndent: 16,
           ),
         ],
-        if (yog.isNotEmpty) ...[
-          _buildShortsGrid(yog, _resultVideos),
+
+        // 2. YouTube-style Long Form Videos (stacked vertically like YouTube)
+        if (vayu.isNotEmpty) ...[
+          _buildYouTubeLongVideosSection(vayu, _resultVideos),
+          if (yog.isNotEmpty)
+            const Divider(
+              color: Color(0x1FFFFFFF),
+              height: 32,
+              thickness: 0.8,
+              indent: 16,
+              endIndent: 16,
+            ),
         ],
-        const SizedBox(height: 48),
+
+        // 3. YouTube-style Shorts Grid (with title, views, and 2-column layout)
+        if (yog.isNotEmpty) ...[
+          _buildYouTubeShortsSection(yog, _resultVideos),
+        ],
       ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Item builders (unchanged logic)
+  // YouTube-Style Account & Video Cards
   // ---------------------------------------------------------------------------
 
-  Widget _buildCreatorTile(UserModel user) {
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 20,
-        backgroundImage: user.profilePic.isNotEmpty
-            ? CachedNetworkImageProvider(user.profilePic)
-            : null,
-        child: user.profilePic.isEmpty ? const Icon(Icons.person) : null,
-      ),
-      title: Text(user.name,
-          style:
-              AppTypography.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+  Widget _buildYouTubeChannelCard(UserModel user) {
+    final hasProfession =
+        user.professionLabel != null && user.professionLabel!.trim().isNotEmpty;
+    final handle = hasProfession
+        ? user.professionLabel!.trim()
+        : '@${user.name.toLowerCase().replaceAll(RegExp(r'\s+'), '')}';
+
+    return InkWell(
       onTap: () {
         Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => ProfileScreen(userId: user.id)));
-      },
-    );
-  }
-
-  Widget _buildVideoSuggestionTile(VideoModel video) {
-    return ListTile(
-      leading: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(4),
-          image: DecorationImage(
-              image: CachedNetworkImageProvider(video.thumbnailUrl),
-              fit: BoxFit.cover),
-        ),
-      ),
-      title: Text(video.videoName,
-          style: AppTypography.bodyMedium,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis),
-      subtitle: Text(video.uploader.name, style: AppTypography.bodySmall),
-      onTap: () => _navigateToVideo(video, [video]),
-    );
-  }
-
-  // Note: _buildVayuCard was removed as it is replaced by the unified VayuVideoCard widget
-
-  Widget _buildShortsGrid(List<VideoModel> yog, List<VideoModel> all) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 8.0;
-        const columns = 3;
-        final availableWidth = constraints.maxWidth - 24.0; // 12 padding on each side
-        final width =
-            (availableWidth - spacing * (columns - 1)) / columns;
-        final height = width * 2;
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: yog.map((v) {
-              return SizedBox(
-                width: width,
-                height: height,
-                child: UnifiedVideoCard(
-                  video: v,
-                  cardType: UnifiedVideoCardType.yug,
-                  onTap: () => _navigateToVideo(v, all),
-                ),
-              );
-            }).toList(),
-          ),
+          context,
+          MaterialPageRoute(builder: (_) => ProfileScreen(userId: user.id)),
         );
       },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Circular Channel Avatar (YouTube radius 36)
+            CircleAvatar(
+              radius: 36,
+              backgroundColor: AppColors.backgroundSecondary,
+              backgroundImage: user.profilePic.isNotEmpty
+                  ? CachedNetworkImageProvider(user.profilePic)
+                  : null,
+              child: user.profilePic.isEmpty
+                  ? const Icon(Icons.person, size: 36, color: AppColors.textTertiary)
+                  : null,
+            ),
+            const SizedBox(width: 16),
+            // Channel Details & Subscribe Button
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    user.name,
+                    style: AppTypography.titleMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    handle,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${FormatUtils.formatViews(user.followersCount)} subscribers • ${user.videos.length} videos',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (user.bio != null && user.bio!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      user.bio!.trim(),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textTertiary,
+                        fontSize: 11,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  FollowButtonWidget(
+                    uploaderId: user.id,
+                    uploaderName: user.name,
+                    height: 32,
+                    activeBackgroundColor: Colors.white,
+                    activeTextColor: Colors.black,
+                    inactiveBackgroundColor: const Color(0xFF272727),
+                    inactiveTextColor: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildYouTubeLongVideosSection(
+      List<VideoModel> vayuVideos, List<VideoModel> allVideos) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(
+            'Videos',
+            style: AppTypography.titleMedium.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          itemCount: vayuVideos.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          itemBuilder: (context, index) {
+            final video = vayuVideos[index];
+            return VayuVideoCard(
+              video: video,
+              onTap: () => _navigateToVideo(video, allVideos),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildYouTubeShortsSection(
+      List<VideoModel> shorts, List<VideoModel> allVideos) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.red,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Shorts',
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: shorts.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.58, // 9:15.5 aspect ratio for vertical card
+            ),
+            itemBuilder: (context, index) {
+              final video = shorts[index];
+              return _buildYouTubeShortCard(video, allVideos);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildYouTubeShortCard(VideoModel video, List<VideoModel> allVideos) {
+    return GestureDetector(
+      onTap: () => _navigateToVideo(video, allVideos),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          color: AppColors.backgroundSecondary,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Thumbnail
+              if (video.thumbnailUrl.isNotEmpty)
+                CachedNetworkImage(
+                  imageUrl: video.thumbnailUrl,
+                  fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => const Center(
+                    child: Icon(Icons.videocam_outlined,
+                        color: AppColors.textTertiary, size: 32),
+                  ),
+                )
+              else
+                const Center(
+                  child: Icon(Icons.videocam_outlined,
+                      color: AppColors.textTertiary, size: 32),
+                ),
+
+              // Bottom gradient overlay for legible text
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 120,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.85),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Exclusive subscriber badge if applicable
+              if (video.isSubscriberOnly)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFD54F), Color(0xFFFF8F00)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.lock_rounded, color: Colors.white, size: 10),
+                        SizedBox(width: 3),
+                        Text(
+                          'EXCLUSIVE',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Title and views count
+              Positioned(
+                left: 8,
+                right: 8,
+                bottom: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      video.videoName.isNotEmpty ? video.videoName : 'Short Video',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(0, 1),
+                            blurRadius: 3,
+                            color: Colors.black87,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${FormatUtils.formatViews(video.views)} views',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -441,17 +651,23 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
 
   Widget _buildNoResults() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search_off_rounded,
-              size: 64,
-              color: AppColors.textTertiary.withValues(alpha: 0.3)),
-          const SizedBox(height: 16),
-          Text('No results found for "$_query"',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off_rounded,
+                size: 64,
+                color: AppColors.textTertiary.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            Text(
+              'No results found for "$_query"',
+              textAlign: TextAlign.center,
               style: AppTypography.bodyLarge
-                  .copyWith(color: AppColors.textTertiary)),
-        ],
+                  .copyWith(color: AppColors.textTertiary),
+            ),
+          ],
+        ),
       ),
     );
   }

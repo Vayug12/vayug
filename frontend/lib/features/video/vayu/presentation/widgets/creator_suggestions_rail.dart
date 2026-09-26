@@ -13,6 +13,7 @@ import 'package:vayug/shared/utils/format_utils.dart';
 import 'package:vayug/shared/widgets/interactive_scale_button.dart';
 import 'package:vayug/shared/widgets/subscribe_button_widget.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
+import 'package:vayug/shared/services/subscriber_disclaimer_service.dart';
 
 /// Horizontal rail of creators to subscribe to, injected once into the Vayu
 /// feed so subscriptions can grow without leaving the feed.
@@ -133,6 +134,14 @@ class _CreatorSuggestionsRailState
     if (_pendingIds.contains(creator.id)) return;
 
     final wasSubscribed = _subscribedIds.contains(creator.id);
+
+    // Only prompt when subscribing, not when unsubscribing
+    if (!wasSubscribed) {
+      final consent =
+          await SubscriberDisclaimerService.ensureConsent(context, ref: ref);
+      if (!consent || !mounted) return;
+    }
+
     setState(() {
       _pendingIds.add(creator.id);
       if (wasSubscribed) {

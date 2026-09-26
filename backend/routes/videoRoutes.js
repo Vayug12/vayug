@@ -9,6 +9,8 @@ import { validateVideoData, upload } from '../middleware/videoMiddleware.js';
 import rateLimit from 'express-rate-limit';
 import { enforceDailyUploadAvailability } from '../middleware/dailyUploadQuota.js';
 
+import * as commentController from '../controllers/video/videoCommentController.js';
+
 const router = express.Router();
 
 // Rate limiter for video uploads
@@ -58,6 +60,14 @@ router.post('/:id/like', verifyToken, interactionController.toggleLike);
 router.delete('/:id/like', verifyToken, interactionController.deleteLike);
 router.post('/:id/increment-view', interactionController.incrementView);
 router.post('/:id/link-click', analyticsController.recordLinkClick);
+
+/**
+ * Video Comments Routes
+ */
+router.get('/:id/comments', passiveVerifyToken, commentController.getVideoComments);
+router.post('/:id/comments', verifyToken, commentController.addComment);
+router.delete('/:id/comments/:commentId', verifyToken, commentController.deleteComment);
+router.post('/:id/comments/:commentId/like', verifyToken, commentController.toggleCommentLike);
 
 /**
  * Video Deletion Routes

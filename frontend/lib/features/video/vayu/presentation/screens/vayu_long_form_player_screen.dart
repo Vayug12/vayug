@@ -54,6 +54,7 @@ import 'package:vayug/shared/navigation/app_route_observer.dart';
 import 'package:vayug/shared/widgets/tab_scope.dart';
 import 'package:vayug/shared/services/playback_coordinator.dart';
 import 'package:vayug/shared/services/install_attribution_service.dart';
+import 'package:vayug/shared/widgets/comments/video_comments_bottom_sheet.dart';
 
 class VayuLongFormPlayerScreen extends ConsumerStatefulWidget {
   final VideoModel video;
@@ -1738,6 +1739,25 @@ class _VayuLongFormPlayerScreenState
     }
   }
 
+  Future<void> _handleOpenComments(VideoModel video) async {
+    try {
+      await VideoCommentsBottomSheet.show(
+        context,
+        video: video,
+        onCommentsCountChanged: (newCount) {
+          if (mounted && video.commentsCount != newCount) {
+            setState(() {
+              video.commentsCount = newCount;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      AppLogger.log('❌ Error opening comments: $e');
+      _showSnackBar('Failed to open comments', type: VayuSnackBarType.error);
+    }
+  }
+
   Future<void> _setPlaybackSpeed(double speed) async {
     if (_playbackSpeed == speed) return;
     try {
@@ -2656,6 +2676,7 @@ class _VayuLongFormPlayerScreenState
               isPortrait: isPortrait,
               onShare: () => _showShareOptions(v),
               onSave: () => _handleToggleSave(index),
+              onComments: () => _handleOpenComments(v),
               onVisitLink: () async {
                 if (v.hasMultipleLinks) {
                   LinksBottomSheet.show(

@@ -32,18 +32,35 @@ class VerticalActionButton extends StatelessWidget {
     
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.5),
-              shape: BoxShape.circle,
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Icon(
+                icon,
+                color: color,
+                size: 28,
+                shadows: const [
+                  Shadow(
+                    color: Colors.black87,
+                    blurRadius: 6,
+                    offset: Offset(0, 1.5),
+                  ),
+                  Shadow(
+                    color: Colors.black38,
+                    blurRadius: 12,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
             ),
-            child: Icon(icon, color: color, size: 18),
           ),
           if (statusText != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               statusText,
               style: const TextStyle(
@@ -53,8 +70,8 @@ class VerticalActionButton extends StatelessWidget {
                 shadows: [
                   Shadow(
                     offset: Offset(0, 1),
-                    blurRadius: 2,
-                    color: Colors.black54,
+                    blurRadius: 4,
+                    color: Colors.black87,
                   ),
                 ],
               ),

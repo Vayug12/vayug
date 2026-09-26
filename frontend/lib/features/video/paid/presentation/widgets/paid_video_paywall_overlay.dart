@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/radius.dart';
-import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/paid/data/services/paid_video_purchase_service.dart';
@@ -67,18 +66,18 @@ class _PaidVideoPaywallOverlayState extends State<PaidVideoPaywallOverlay> {
 
     return Positioned.fill(
       child: Container(
-        color: AppColors.backgroundPrimary.withValues(alpha: 0.94),
-        padding: AppSpacing.edgeInsetsAll24,
+        color: AppColors.backgroundPrimary.withValues(alpha: 0.88),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320),
+            constraints: const BoxConstraints(maxWidth: 260),
             child: Container(
-              padding: AppSpacing.edgeInsetsAll24,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               decoration: BoxDecoration(
                 color: AppColors.backgroundSecondary,
                 borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(
-                  color: AppColors.borderPrimary,
+                  color: AppColors.borderPrimary.withValues(alpha: 0.6),
                   width: 1,
                 ),
               ),
@@ -86,43 +85,37 @@ class _PaidVideoPaywallOverlayState extends State<PaidVideoPaywallOverlay> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
-                    decoration: const BoxDecoration(
-                      color: AppColors.backgroundPrimary,
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundPrimary.withValues(alpha: 0.7),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.lock_rounded,
-                      size: 24,
+                      size: 20,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  AppSpacing.vSpace16,
-                  Text(
-                    'Paid Video',
-                    style: AppTypography.titleMedium.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  AppSpacing.vSpace4,
+                  const SizedBox(height: 12),
                   Text(
                     'Watch full video for $priceLabel',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
+                    style: AppTypography.titleSmall.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  AppSpacing.vSpace24,
+                  const SizedBox(height: 18),
                   AppButton(
                     onPressed: _isPurchasing ? null : _handleUnlock,
                     isLoading: _isPurchasing,
                     label: 'Unlock • $priceLabel',
                     variant: AppButtonVariant.primary,
+                    size: AppButtonSize.medium,
                     isFullWidth: true,
                   ),
-                  AppSpacing.vSpace8,
+                  const SizedBox(height: 6),
                   AppButton(
                     onPressed: _isPurchasing ? null : widget.onReplayPreview,
                     label: 'Watch Preview',

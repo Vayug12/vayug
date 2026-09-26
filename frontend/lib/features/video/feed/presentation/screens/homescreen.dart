@@ -38,6 +38,7 @@ import 'package:vayug/core/providers/profile_providers.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/core/data/services/video_service.dart';
 import 'package:vayug/features/video/vayu/presentation/screens/vayu_long_form_player_screen.dart';
+import 'package:vayug/shared/managers/smart_cache_manager.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -88,6 +89,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   Future<void> _refreshVideoList() async {
     try {
+      // Invalidate memory video cache
+      try {
+        await SmartCacheManager().invalidateVideoCache();
+      } catch (e) {
+        AppLogger.log('❌ MainScreen: Error invalidating SmartCache: $e');
+      }
+
       // Refresh the video screen
       final videoScreenState = _videoScreenKey.currentState;
       if (videoScreenState != null) {
@@ -102,6 +110,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
         VayuScreen.refresh(_vayuScreenKey);
       } catch (e) {
         AppLogger.log('❌ MainScreen: Error refreshing Vayu videos: $e');
+      }
+
+      // **NEW: Invalidate & refresh Profile screen videos**
+      try {
+        ref.read(profileStateManagerProvider).refreshVideosOnly();
+      } catch (e) {
+        AppLogger.log('❌ MainScreen: Error refreshing Profile videos: $e');
       }
 
       // Navigate to video tab ONLY if user is still on upload tab (index 2)

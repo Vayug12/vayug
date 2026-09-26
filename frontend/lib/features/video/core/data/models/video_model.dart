@@ -95,6 +95,7 @@ class VideoModel {
   int likes;
   int views;
   int shares;
+  int commentsCount;
   final String? description; // Optional description field
   final Uploader uploader;
   final double earnings;
@@ -150,6 +151,7 @@ class VideoModel {
     required this.likes,
     required this.views,
     required this.shares,
+    this.commentsCount = 0,
     this.description,
     required this.uploader,
     required this.uploadedAt,
@@ -211,6 +213,7 @@ class VideoModel {
     int? likes,
     int? views,
     int? shares,
+    int? commentsCount,
     String? description,
     Uploader? uploader,
     DateTime? uploadedAt,
@@ -256,6 +259,7 @@ class VideoModel {
       likes: likes ?? this.likes,
       views: views ?? this.views,
       shares: shares ?? this.shares,
+      commentsCount: commentsCount ?? this.commentsCount,
       description: description ?? this.description,
       uploader: uploader ?? this.uploader,
       uploadedAt: uploadedAt ?? this.uploadedAt,
@@ -345,6 +349,9 @@ class VideoModel {
         shares: (json['shares'] is int)
             ? json['shares']
             : int.tryParse(json['shares']?.toString() ?? '0') ?? 0,
+        commentsCount: (json['commentsCount'] is int)
+            ? json['commentsCount']
+            : int.tryParse(json['commentsCount']?.toString() ?? '0') ?? 0,
         description: json['description']?.toString(), // Parse description field
 
         uploader: () {
@@ -643,6 +650,7 @@ class VideoModel {
       'likes': likes,
       'views': views,
       'shares': shares,
+      'commentsCount': commentsCount,
       'description': description, // Include description in JSON
       'uploader': {
         '_id': uploader.id,
@@ -682,6 +690,7 @@ class VideoModel {
       'crossPostStatus': crossPostStatus,
       'crossPostDetails': crossPostDetails,
       'quizzes': quizzes?.map((q) => q.toJson()).toList(),
+      'paidAccess': paidAccess?.toJson(),
     };
   }
 

@@ -1,7 +1,7 @@
 import express from 'express';
 import { verifyToken } from '../../utils/verifytoken.js';
 import AdCreative from '../../models/AdCreative.js';
-import Comment from '../models/Comment.js';
+import Comment from '../../models/Comment.js';
 
 const router = express.Router();
 

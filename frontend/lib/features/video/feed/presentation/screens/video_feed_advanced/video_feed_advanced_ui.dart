@@ -1635,10 +1635,10 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                   return AnimatedPositioned(
                     duration: const Duration(milliseconds: 350),
                     curve: Curves.easeOutCubic,
-                    // **FIX: Only elevate video title when Visit Now button is ACTUALLY revealed**
-                    // Keeps title at bottom before showAtSeconds (0 empty gap)
+                    // **FIX: Elevate video title compactly when Visit Now button is revealed**
+                    // Keeps title right above button without excessive blank space
                     bottom: (video.hasLink && isLinkRevealed)
-                        ? bottomPadding + 65
+                        ? bottomPadding + 44
                         : bottomPadding,
                     left: 0,
                     // **FIX: Reserve dynamic space for right-side action column**
@@ -1833,6 +1833,13 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                         sizeScale: actionSizeScale),
                     AppSpacing.vSpace12,
                     _buildVerticalActionButton(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      count: video.commentsCount > 0 ? video.commentsCount : null,
+                      onTap: () => _handleComments(video),
+                      sizeScale: actionSizeScale,
+                    ),
+                    AppSpacing.vSpace12,
+                    _buildVerticalActionButton(
                       icon: Icons.share,
                       onTap: () => _handleShare(video),
                       sizeScale: actionSizeScale,
@@ -1888,11 +1895,11 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                             key: const ValueKey('visit_now_btn_pad'),
                             padding: EdgeInsets.only(
                               left: 16,
-                              bottom: bottomPadding + 16,
+                              bottom: (bottomPadding + 4).clamp(23.0, 60.0),
                             ),
                             child: SizedBox(
                               width: (_screenWidth ?? MediaQuery.of(context).size.width) *
-                                  0.75,
+                                  0.65,
                               child: FeedVisitNowButton(
                                 video: video,
                                 url: video.validLinks.isNotEmpty
@@ -2005,35 +2012,22 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                   ),
                   likeBuilder: (bool isLiked) {
                     return Center(
-                      child: Container(
-                        width: scaledContainerSize,
-                        height: scaledContainerSize,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppColors.backgroundSecondary
-                              .withValues(alpha: 0.7),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.shadowSecondary
-                                  .withValues(alpha: 0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: isLiked ? AppColors.error : AppColors.white,
-                          size: scaledIconSize,
-                          shadows: const [
-                            Shadow(
-                              color: AppColors.overlayMedium,
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
+                      child: Icon(
+                        isLiked ? Icons.favorite : Icons.favorite_border,
+                        color: isLiked ? AppColors.error : AppColors.white,
+                        size: scaledIconSize,
+                        shadows: const [
+                          Shadow(
+                            color: Colors.black87,
+                            blurRadius: 6,
+                            offset: Offset(0, 1.5),
+                          ),
+                          Shadow(
+                            color: Colors.black38,
+                            blurRadius: 12,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -2050,6 +2044,13 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                       color: AppColors.white,
                       fontSize: AppTypography.fontSizeSM,
                       fontWeight: AppTypography.weightMedium,
+                      shadows: const [
+                        Shadow(
+                          offset: Offset(0, 1),
+                          blurRadius: 4,
+                          color: Colors.black87,
+                        ),
+                      ],
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -2112,13 +2113,9 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
     bool isPrimary = false,
     double sizeScale = 1.0,
   }) {
-    final containerSize = (isPrimary
-            ? AppConstants.primaryActionButtonContainerSize
-            : AppConstants.secondaryActionButtonContainerSize) *
-        sizeScale;
     final iconSize = (isPrimary
             ? AppConstants.primaryActionButtonSize
-            : AppConstants.secondaryActionButtonSize) *
+            : 24.0) *
         sizeScale;
     final hitTargetSize =
         isPrimary ? _primaryActionHitTargetSize : _secondaryActionHitTargetSize;
@@ -2133,33 +2130,22 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
             width: hitTargetSize,
             height: hitTargetSize,
             child: Center(
-              child: Container(
-                width: containerSize,
-                height: containerSize,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundSecondary.withValues(alpha: 0.7),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.shadowSecondary.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: iconSize,
-                  shadows: const [
-                    Shadow(
-                      color: AppColors.overlayDark,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
+              child: Icon(
+                icon,
+                color: color,
+                size: iconSize,
+                shadows: const [
+                  Shadow(
+                    color: Colors.black87,
+                    blurRadius: 6,
+                    offset: Offset(0, 1.5),
+                  ),
+                  Shadow(
+                    color: Colors.black38,
+                    blurRadius: 12,
+                    offset: Offset(0, 3),
+                  ),
+                ],
               ),
             ),
           ),
@@ -2174,8 +2160,8 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                 shadows: const [
                   Shadow(
                     offset: Offset(0, 1),
-                    blurRadius: 2,
-                    color: AppColors.overlayDark,
+                    blurRadius: 4,
+                    color: Colors.black87,
                   ),
                 ],
               ),
@@ -2282,7 +2268,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
 
     final slide = carouselAd.slides.first;
     final imageUrl = slide.thumbnailUrl ?? slide.mediaUrl;
-    if (imageUrl == null || imageUrl.isEmpty) {
+    if (imageUrl.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -2629,7 +2615,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
     _wasPlaying = _safeIsPlaying();
     _checkLinkReveal();
     widget.controller.addListener(_handleControllerChange);
-    // If already playing when widget mounts, start the 3-second auto-hide timer
+    // If already playing when widget mounts, start the 8-second auto-hide timer
     if (_wasPlaying) {
       _startAutoHideTimer();
     }
@@ -2680,7 +2666,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
           });
         }
       } else {
-        // Video started playing -> start 3-second countdown before auto-hiding
+        // Video started playing -> start 8-second countdown before auto-hiding
         _startAutoHideTimer();
       }
     }
@@ -2693,7 +2679,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
         _isAutoHideExpired = false;
       });
     }
-    _autoHideTimer = Timer(const Duration(seconds: 3), () {
+    _autoHideTimer = Timer(const Duration(seconds: 8), () {
       if (mounted && _safeIsPlaying()) {
         setState(() {
           _isAutoHideExpired = true;
@@ -2786,7 +2772,7 @@ class _YugOverlayAutoHideHostState extends State<_YugOverlayAutoHideHost> {
 
                   final double targetBottom = isQuizVisible
                       ? widget.bottomPadding + (isCompact ? 10.0 : 20.0)
-                      : widget.bottomPadding + 16.0;
+                      : (widget.bottomPadding + 4.0).clamp(23.0, 60.0);
 
                   final double targetRight = isCompact ? 80.0 : 16.0;
 

@@ -6,6 +6,7 @@ import 'package:vayug/core/providers/auth_providers.dart';
 import 'package:vayug/shared/utils/app_logger.dart';
 import 'package:vayug/shared/widgets/subscribe_button_widget.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
+import 'package:vayug/shared/services/subscriber_disclaimer_service.dart';
 
 class FollowButtonWidget extends ConsumerStatefulWidget {
   final String uploaderId;
@@ -166,23 +167,34 @@ class _FollowButtonWidgetState extends ConsumerState<FollowButtonWidget> {
       return;
     }
 
+    final authService = ref.read(authServiceProvider);
+    final userData = await authService.getUserData();
+    if (userData == null || userData['token'] == null) {
+      _showSnackBar('Please sign in to follow users');
+      return;
+    }
+
     final userProviderRef = ref.read(userProvider);
     final currentlyFollowingFromProvider =
         userProviderRef.isFollowingUser(trimmedUploaderId);
     final currentlyFollowing =
         _optimisticIsFollowingNotifier.value ?? currentlyFollowingFromProvider;
+
+    // Show disclaimer only when subscribing (not when unsubscribing)
+    if (!currentlyFollowing) {
+      final consent =
+          await SubscriberDisclaimerService.ensureConsent(context, ref: ref);
+      if (!consent || !mounted) {
+        return;
+      }
+    }
+
     _optimisticIsFollowingNotifier.value = !currentlyFollowing;
 
     try {
       _isLoadingNotifier.value = true;
       AppLogger.log(
           '🎯 FollowButtonWidget: Attempting to toggle follow for ${widget.uploaderName} (ID: $trimmedUploaderId)');
-      final authService = ref.read(authServiceProvider);
-      final userData = await authService.getUserData();
-      if (userData == null || userData['token'] == null) {
-        _showSnackBar('Please sign in to follow users');
-        return;
-      }
 
       final success = await userProviderRef.toggleFollow(trimmedUploaderId);
 

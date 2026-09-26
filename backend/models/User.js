@@ -88,6 +88,11 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // **NEW: Subscriber off-platform connection & email export disclaimer acknowledgment**
+  hasAcknowledgedSubscriberExport: {
+    type: Boolean,
+    default: false
+  },
   preferredCurrency: {
     type: String,
     enum: ['INR', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'],

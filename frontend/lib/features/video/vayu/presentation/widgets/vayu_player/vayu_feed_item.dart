@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
+import 'package:vayug/core/providers/auth_providers.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/video/core/presentation/widgets/quiz_overlay.dart';
 import 'package:vayug/features/video/paid/presentation/widgets/paid_video_player_guard.dart';
@@ -383,9 +384,18 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
     final leftPadding = playerInsets.left;
     final rightPadding = playerInsets.right;
 
+    final authController = ref.watch(googleSignInProvider);
+    final currentUserId =
+        authController.userData?['googleId'] ?? authController.userData?['id'];
+    final bool isCreator = currentUserId != null &&
+        (widget.video.uploader.googleId == currentUserId ||
+            widget.video.uploader.id == currentUserId ||
+            widget.video.uploader.mongoId == currentUserId);
+
     return PaidVideoPlayerGuard(
       video: widget.video,
       controller: widget.controller,
+      isCreator: isCreator,
       child: RepaintBoundary(
         child: Stack(
         fit: StackFit.passthrough,

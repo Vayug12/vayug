@@ -34,6 +34,7 @@ export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceI
     likes: parseInt(videoObj.likes) || 0,
     views: parseInt(videoObj.views) || 0,
     shares: parseInt(videoObj.shares) || 0,
+    commentsCount: parseInt(videoObj.commentsCount) || 0,
     duration: parseInt(videoObj.duration) || 0,
     aspectRatio: parseFloat(videoObj.aspectRatio) || 9 / 16,
     videoType: videoObj.videoType || 'yog',

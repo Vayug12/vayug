@@ -3,6 +3,7 @@
 
 import './User.js';
 import './Video.js';
+import './Comment.js';
 
 import './Invoice.js';
 import './AdCampaign.js';

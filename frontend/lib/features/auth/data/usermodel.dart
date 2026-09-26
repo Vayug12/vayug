@@ -13,6 +13,7 @@ class UserModel {
   final String? websiteUrl;
   final String? professionId;
   final String? professionLabel;
+  final bool hasAcknowledgedSubscriberExport;
 
   UserModel({
     required this.id,
@@ -29,6 +30,7 @@ class UserModel {
     this.websiteUrl,
     this.professionId,
     this.professionLabel,
+    this.hasAcknowledgedSubscriberExport = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -69,6 +71,8 @@ class UserModel {
         professionId: json['professionId']?.toString(),
         professionLabel:
             (json['profession'] as Map<String, dynamic>?)?['label']?.toString(),
+        hasAcknowledgedSubscriberExport:
+            json['hasAcknowledgedSubscriberExport'] == true,
       );
     } catch (e) {
       // Return a safe minimal fallback if parsing utterly fails
@@ -100,6 +104,7 @@ class UserModel {
       'profession': professionLabel == null
           ? null
           : {'id': professionId, 'label': professionLabel},
+      'hasAcknowledgedSubscriberExport': hasAcknowledgedSubscriberExport,
     };
   }
 
@@ -118,6 +123,7 @@ class UserModel {
     String? websiteUrl,
     String? professionId,
     String? professionLabel,
+    bool? hasAcknowledgedSubscriberExport,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -134,6 +140,8 @@ class UserModel {
       websiteUrl: websiteUrl ?? this.websiteUrl,
       professionId: professionId ?? this.professionId,
       professionLabel: professionLabel ?? this.professionLabel,
+      hasAcknowledgedSubscriberExport:
+          hasAcknowledgedSubscriberExport ?? this.hasAcknowledgedSubscriberExport,
     );
   }
 }

@@ -36,6 +36,8 @@ import 'package:vayug/features/video/paid/presentation/widgets/upi_setup_dialog.
 import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/radius.dart';
 import 'package:video_player/video_player.dart';
+import 'package:vayug/shared/managers/smart_cache_manager.dart';
+import 'package:vayug/core/providers/profile_providers.dart';
 
 class UploadScreen extends ConsumerStatefulWidget {
   final VoidCallback? onVideoUploaded;
@@ -48,7 +50,7 @@ class UploadScreen extends ConsumerStatefulWidget {
 
 class _UploadScreenState extends ConsumerState<UploadScreen> {
   /// Feature flag for Paid Video upload. Set to true when testing and launching.
-  static const bool _enablePaidVideo = false;
+  static const bool _enablePaidVideo = true;
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _linkController = TextEditingController();
@@ -375,6 +377,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   void _handleUploadOutcome(UploadStateManager manager) {
     if (manager.status != UploadStatus.success) return;
+
+    // Invalidate local memory video cache and trigger profile video refresh
+    try {
+      SmartCacheManager().invalidateVideoCache();
+      ref.read(profileStateManagerProvider).refreshVideosOnly();
+    } catch (e) {
+      AppLogger.log('⚠️ UploadScreen: Error invalidating profile video cache: $e');
+    }
 
     // A backgrounded upload keeps its result on screen as a banner instead of
     // resetting under the user, who is not looking at this screen.

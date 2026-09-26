@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:vayug/features/profile/core/data/services/user_service.dart';
 import 'package:vayug/features/auth/data/services/authservices.dart';
 import 'package:vayug/features/auth/data/usermodel.dart';
+import 'package:vayug/shared/services/subscriber_disclaimer_service.dart';
 
 class UserProvider extends ChangeNotifier {
   final UserService _userService = UserService();
@@ -111,6 +112,9 @@ class UserProvider extends ChangeNotifier {
       final userData = await _userService.getUserData(normalizedId);
       if (userData != null) {
         _userDataCache[normalizedId] = userData;
+        if (userData.hasAcknowledgedSubscriberExport) {
+          SubscriberDisclaimerService.acknowledge(normalizedId, neverAskAgain: true);
+        }
       }
       return userData;
     } catch (e) {

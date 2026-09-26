@@ -164,6 +164,26 @@ extension _VideoFeedActions on _VideoFeedAdvancedState {
     }
   }
 
+  /// Comments bottom sheet handler
+  Future<void> _handleComments(VideoModel video) async {
+    try {
+      await VideoCommentsBottomSheet.show(
+        context,
+        video: video,
+        onCommentsCountChanged: (newCount) {
+          if (mounted && video.commentsCount != newCount) {
+            safeSetState(() {
+              video.commentsCount = newCount;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      AppLogger.log('❌ Error showing comments: $e');
+      _showSnackBar('Failed to open comments', isError: true);
+    }
+  }
+
   /// Visit now button handler
   Future<void> _handleVisitNow(VideoModel video) async {
     final validLinks = video.validLinks;
@@ -252,6 +272,16 @@ extension _VideoFeedActions on _VideoFeedAdvancedState {
       if (trimmedUploaderId.isEmpty || trimmedUploaderId == 'unknown') {
         AppLogger.log('⚠️ Cannot follow: Invalid uploader ID');
         return;
+      }
+
+      final isCurrentlyFollowing =
+          userProviderRef.isFollowingUser(trimmedUploaderId);
+
+      // Only prompt when subscribing, not when unsubscribing
+      if (!isCurrentlyFollowing) {
+        final consent =
+            await SubscriberDisclaimerService.ensureConsent(context, ref: ref);
+        if (!consent || !mounted) return;
       }
 
       final success = await userProviderRef.toggleFollow(trimmedUploaderId);

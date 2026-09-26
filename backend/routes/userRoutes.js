@@ -234,7 +234,7 @@ router.get('/profile', verifyToken, async (req, res) => {
     // **IDENTITY OPTIMIZATION: Use req.user._id if available**
     const query = req.user?._id ? { _id: req.user._id } : { googleId: currentUserId };
     const currentUser = await User.findOne(query)
-      .select('_id googleId name email profilePic professionId websiteUrl videos followingCount followerCount preferredCurrency preferredPaymentMethod country authProvider phoneNumber phoneVerifiedAt isSyntheticEmail paymentDetails')
+      .select('_id googleId name email profilePic professionId websiteUrl videos followingCount followerCount preferredCurrency preferredPaymentMethod country authProvider phoneNumber phoneVerifiedAt isSyntheticEmail paymentDetails hasAcknowledgedSubscriberExport')
       .lean();
     
     if (!currentUser) {
@@ -292,6 +292,7 @@ router.get('/profile', verifyToken, async (req, res) => {
       preferredPaymentMethod: currentUser.preferredPaymentMethod,
       country: currentUser.country,
       paymentDetails: currentUser.paymentDetails || null,
+      hasAcknowledgedSubscriberExport: !!currentUser.hasAcknowledgedSubscriberExport,
       rank: ownRank,
     };
 
@@ -1557,6 +1558,31 @@ router.delete('/delete-account', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('❌ Delete account error:', err);
     res.status(500).json({ error: 'Failed to delete account', details: err.message });
+  }
+});
+
+// ✅ Route to acknowledge subscriber off-platform export disclaimer
+router.post('/acknowledge-subscriber-export', verifyToken, async (req, res) => {
+  try {
+    const user = await resolveRequestUser(req, '_id');
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    await User.findByIdAndUpdate(user._id, {
+      hasAcknowledgedSubscriberExport: true
+    });
+
+    invalidateProfileCache(user._id.toString());
+
+    res.json({
+      success: true,
+      hasAcknowledgedSubscriberExport: true,
+      message: 'Subscriber export disclaimer acknowledged successfully'
+    });
+  } catch (err) {
+    console.error('❌ Acknowledge subscriber export error:', err);
+    res.status(500).json({ success: false, error: 'Failed to record acknowledgment' });
   }
 });
 

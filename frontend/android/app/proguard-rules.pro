@@ -36,11 +36,6 @@
 -keep class com.google.ads.** { *; }
 -keep class io.flutter.plugins.googlemobileads.** { *; }
 
-# --- Hive (Data Storage) ---
-# Keep Hive TypeAdapters
--keep class * extends io.hive.TypeAdapter { *; }
--keep class * extends io.realm.hive.TypeAdapter { *; }
-
 # --- FFmpeg & Native Libraries ---
 -keep class com.arthenica.ffmpegkit.** { *; }
 -keep class com.google.mlkit.** { *; }

@@ -7,6 +7,7 @@ class ActionButtonsWidget extends StatelessWidget {
   final int index;
   final bool isLiked;
   final VoidCallback onLike;
+  final VoidCallback? onComment;
   final VoidCallback onShare;
 
   const ActionButtonsWidget({
@@ -15,6 +16,7 @@ class ActionButtonsWidget extends StatelessWidget {
     required this.index,
     required this.isLiked,
     required this.onLike,
+    this.onComment,
     required this.onShare,
   }) : super(key: key);
 
@@ -34,6 +36,21 @@ class ActionButtonsWidget extends StatelessWidget {
             onPressed: onLike,
           ),
           Text('${video.likes}', style: const TextStyle(color: Colors.white)),
+          if (onComment != null) ...[
+            const SizedBox(height: 12),
+            IconButton(
+              icon: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Colors.white,
+                size: AppConstants.actionButtonSize,
+              ),
+              onPressed: onComment,
+            ),
+            Text(
+              '${video.commentsCount}',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
           // **REDUCED spacing from 20 to 12 for more compact look**
           const SizedBox(height: 12),
           IconButton(

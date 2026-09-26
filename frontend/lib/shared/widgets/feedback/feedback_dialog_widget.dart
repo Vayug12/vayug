@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:vayug/shared/services/http_client_service.dart';
 import 'dart:convert';
 import 'package:vayug/shared/config/app_config.dart';
 import 'package:vayug/features/auth/data/services/authservices.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:vayug/core/design/colors.dart';
+import 'package:vayug/core/design/radius.dart';
+import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 import 'package:vayug/shared/services/install_attribution_service.dart';
@@ -23,8 +27,8 @@ class _FeedbackDialogWidgetState extends State<FeedbackDialogWidget> {
 
   final Map<int, Map<String, dynamic>> _ratingData = {
     1: {'emoji': '😢', 'text': 'Oh no!', 'color': Colors.red},
-    2: {'emoji': '😞', 'text': 'Oh no!', 'color': Colors.orange},
-    3: {'emoji': '😐', 'text': 'We can do better', 'color': Colors.amber},
+    2: {'emoji': '😞', 'text': 'Could be better', 'color': Colors.orange},
+    3: {'emoji': '😐', 'text': 'We can improve', 'color': Colors.amber},
     4: {'emoji': '🙂', 'text': 'Good!', 'color': Colors.lightGreen},
     5: {'emoji': '🤩', 'text': 'Awesome!', 'color': Colors.green},
   };
@@ -123,108 +127,150 @@ class _FeedbackDialogWidgetState extends State<FeedbackDialogWidget> {
     final int ratingInt = _rating.toInt();
     final currentData = _ratingData[ratingInt];
 
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      contentPadding: const EdgeInsets.all(24),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (Widget child, Animation<double> animation) {
-                  return ScaleTransition(scale: animation, child: child);
-                },
-                child: currentData != null
-                    ? Column(
-                        key: ValueKey<int>(ratingInt),
-                        children: [
-                          Text(
-                            currentData['emoji'],
-                            style: const TextStyle(fontSize: 64),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 290),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundSecondary,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(
+              color: AppColors.borderPrimary.withValues(alpha: 0.6),
+              width: 1,
+            ),
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header (Dynamic & Compact)
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: currentData != null
+                      ? Text(
+                          '${currentData['emoji']}  ${currentData['text']}',
+                          key: ValueKey<int>(ratingInt),
+                          style: AppTypography.titleSmall.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            currentData['text'],
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          textAlign: TextAlign.center,
+                        )
+                      : Text(
+                          'Rate your experience',
+                          key: const ValueKey<String>('default_title'),
+                          style: AppTypography.titleSmall.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
-                      )
-                    : const Column(
-                        key: ValueKey<String>('default'),
-                        children: [
-                          // Placeholder to keep spacing before rating
-                          SizedBox(height: 80), 
-                        ],
-                      ),
-              ),
-              const SizedBox(height: 8),
-              if (_rating == 0)
-                const Text(
-                  'How would you rate your experience?',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                          textAlign: TextAlign.center,
+                        ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _rating == 0
+                      ? 'Tap a star to rate'
+                      : 'Please leave feedback (optional)',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+
+                // Star rating row
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      final filled = index < _rating.round();
+                      return InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _rating = index + 1.0);
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                          child: Icon(
+                            filled ? Icons.star_rounded : Icons.star_outline_rounded,
+                            color: filled
+                                ? const Color(0xFFFFB800)
+                                : AppColors.borderPrimary,
+                            size: 32,
+                          ),
+                        ),
+                      );
+                    }),
                   ),
                 ),
-              if (_rating == 0) const SizedBox(height: 16),
-              if (_rating != 0) 
-                 const Text(
-                  'Please leave us some feedback.',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-               const SizedBox(height: 24),
-              
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    final filled = index < _rating.round();
-                    return IconButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      constraints: const BoxConstraints(),
-                      icon: Icon(
-                        filled ? Icons.star : Icons.star_border,
-                        color: filled ? Colors.amber : Colors.grey,
-                        size: 40,
+                const SizedBox(height: 14),
+
+                // Compact comment input
+                TextFormField(
+                  controller: _messageController,
+                  minLines: 2,
+                  maxLines: 3,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: AppColors.backgroundPrimary,
+                    hintText: 'Share your thoughts (optional)',
+                    hintStyle: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary.withValues(alpha: 0.7),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.input),
+                      borderSide: BorderSide(
+                        color: AppColors.borderPrimary.withValues(alpha: 0.6),
                       ),
-                      onPressed: () => setState(() => _rating = index + 1.0),
-                    );
-                  }),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.input),
+                      borderSide: BorderSide(
+                        color: AppColors.borderPrimary.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.input),
+                      borderSide: const BorderSide(
+                        color: AppColors.primary,
+                        width: 1.2,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              TextFormField(
-                controller: _messageController,
-                minLines: 3,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Share your thoughts (optional)',
-                  alignLabelWithHint: true,
+                const SizedBox(height: 16),
+
+                // Primary & Secondary Buttons
+                AppButton(
+                  onPressed: _submitting ? null : _submit,
+                  label: 'Submit',
+                  variant: AppButtonVariant.primary,
+                  size: AppButtonSize.medium,
+                  isLoading: _submitting,
+                  isFullWidth: true,
                 ),
-              ),
-              const SizedBox(height: 24),
-              AppButton(
-                onPressed: _submitting ? null : _submit,
-                label: 'RATE',
-                variant: AppButtonVariant.primary,
-                isLoading: _submitting,
-                isFullWidth: true,
-              ),
-               const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 AppButton(
                   onPressed: _submitting ? null : () => Navigator.of(context).pop(),
                   label: 'Maybe Later',
                   variant: AppButtonVariant.text,
+                  size: AppButtonSize.small,
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

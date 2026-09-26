@@ -9,6 +9,7 @@ class VideoOverlay extends StatefulWidget {
   final double? screenHeight;
   final bool Function(VideoModel) isLiked;
   final VoidCallback onLike;
+  final VoidCallback? onComment;
   final VoidCallback onShare;
   final VoidCallback onOpenCarouselAd;
   final VoidCallback onOpenProfile;
@@ -24,6 +25,7 @@ class VideoOverlay extends StatefulWidget {
     required this.screenHeight,
     required this.isLiked,
     required this.onLike,
+    this.onComment,
     required this.onShare,
     required this.onOpenCarouselAd,
     required this.onOpenProfile,
@@ -148,6 +150,16 @@ class _VideoOverlayState extends State<VideoOverlay> {
                   onTap: widget.onLike,
                 ),
                 const SizedBox(height: 10),
+
+                // Comment
+                if (widget.onComment != null) ...[
+                  VerticalActionButton(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    count: widget.video.commentsCount > 0 ? widget.video.commentsCount : null,
+                    onTap: widget.onComment!,
+                  ),
+                  const SizedBox(height: 10),
+                ],
 
                 // Share
                 VerticalActionButton(

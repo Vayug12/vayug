@@ -12,6 +12,7 @@ import 'package:vayug/shared/utils/format_utils.dart';
 import 'package:vayug/shared/widgets/app_button.dart';
 import 'package:vayug/shared/widgets/subscribe_button_widget.dart';
 import 'package:vayug/shared/widgets/vayu_snackbar.dart';
+import 'package:vayug/shared/services/subscriber_disclaimer_service.dart';
 
 /// First-run gate for the Vayu feed.
 ///
@@ -84,6 +85,14 @@ class _VayuSubscribeGateState extends ConsumerState<VayuSubscribeGate> {
     if (_pendingIds.contains(creator.id) || _isUnlocking) return;
 
     final wasSubscribed = _subscribedIds.contains(creator.id);
+
+    // Only prompt when subscribing, not when unsubscribing
+    if (!wasSubscribed) {
+      final consent =
+          await SubscriberDisclaimerService.ensureConsent(context, ref: ref);
+      if (!consent || !mounted) return;
+    }
+
     setState(() {
       _pendingIds.add(creator.id);
       if (wasSubscribed) {

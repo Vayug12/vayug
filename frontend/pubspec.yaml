@@ -80,9 +80,6 @@ dependencies:
   connectivity_plus: ^6.0.5
   device_info_plus: ^12.3.0  # Downgraded for Dart SDK 3.5.0 compatibility
   package_info_plus: ^9.0.0
-  # **NEW: Hive for Instant Data Loading**
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
   geolocator: ^13.0.2
   geocoding: ^3.0.0
   firebase_messaging: ^15.1.3

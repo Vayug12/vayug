@@ -29,6 +29,7 @@ import revenuecatWebhookRoutes from '../routes/webhooks/revenuecatRoutes.js';
 import attributionRoutes from '../routes/attributionRoutes.js';
 import professionRoutes from '../routes/professionRoutes.js';
 import paidVideoRoutes from '../routes/video/paidVideoRoutes.js';
+import telegramRoutes from '../routes/telegramRoutes.js';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from '../middleware/errorHandler.js';
@@ -217,6 +218,7 @@ export default async ({ app }) => {
   apiRouter.use('/attribution', attributionRoutes);
   apiRouter.use('/professions', professionRoutes);
   apiRouter.use('/paid-videos', paidVideoRoutes);
+  apiRouter.use('/telegram', telegramRoutes);
 
   // Apply Passive Auth BEFORE Rate Limiter
   app.use('/api', apiVersioning, passiveVerifyToken, versionTracking, activityTracking, apiLimiter, apiRouter);

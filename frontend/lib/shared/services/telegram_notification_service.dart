@@ -49,12 +49,11 @@ class TelegramNotificationService {
     return headers;
   }
 
-  /// Get current creator Telegram connection status
-  Future<TelegramStatus> getStatus() async {
-    final hasInternet = await ConnectivityService.hasInternetConnection();
-    if (!hasInternet) return const TelegramStatus();
-
+  /// Null means unavailable, never a confirmed disconnected account.
+  Future<TelegramStatus?> getStatus() async {
     try {
+      final hasInternet = await ConnectivityService.hasInternetConnection();
+      if (!hasInternet) return null;
       final headers = await _getAuthHeaders();
       final response = await _httpClient.dio.get(
         '$_baseUrl/api/telegram/status',
@@ -65,12 +64,14 @@ class TelegramNotificationService {
         final data = response.data is Map<String, dynamic>
             ? response.data as Map<String, dynamic>
             : Map<String, dynamic>.from(response.data as Map);
-        return TelegramStatus.fromJson(data);
+        if (data['isConnected'] is bool) {
+          return TelegramStatus.fromJson(data);
+        }
       }
-    } catch (e) {
-      AppLogger.error('TelegramNotificationService.getStatus failed: $e');
+    } catch (_) {
+      AppLogger.error('Telegram connection status unavailable');
     }
-    return const TelegramStatus();
+    return null;
   }
 
   /// Get Telegram deep link URL

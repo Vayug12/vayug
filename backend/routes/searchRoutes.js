@@ -64,4 +64,23 @@ router.get('/creators', async (req, res) => {
   }
 });
 
+// GET /api/search/unified?q=...&limit=20
+router.get('/unified', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    const limit = Math.min(parseInt(req.query.limit || '20', 10), 50);
+
+    if (!q) {
+      return res.json({ creators: [], creatorVideos: [], videos: [] });
+    }
+
+    const results = await activeSearchProvider.searchUnified(q, limit);
+    return res.json(results);
+
+  } catch (err) {
+    console.error('❌ Router Search Error (unified):', err);
+    return res.status(500).json({ creators: [], creatorVideos: [], videos: [], error: 'Search failed' });
+  }
+});
+
 export default router;

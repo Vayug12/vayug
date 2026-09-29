@@ -2,7 +2,19 @@ import 'package:vayug/features/auth/data/usermodel.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/features/profile/search/data/models/search_suggestions.dart';
 
-/// **CONTRACT LAYER — Do NOT change this interface.**
+class UnifiedSearchResult {
+  final List<UserModel> creators;
+  final List<VideoModel> creatorVideos;
+  final List<VideoModel> videos;
+
+  const UnifiedSearchResult({
+    this.creators = const [],
+    this.creatorVideos = const [],
+    this.videos = const [],
+  });
+}
+
+/// **CONTRACT LAYER — Do NOT break this interface.**
 ///
 /// This is the "FFmpeg codec specification" for Search.
 /// Any search backend (HTTP, AI, offline, mock) implements this.
@@ -19,4 +31,7 @@ abstract class ISearchService {
   /// Lightweight autocomplete — returns a small set of creators + videos.
   /// Called on every keystroke (debounced by the consumer).
   Future<SearchSuggestions> getSuggestions(String query);
+
+  /// Unified search returning matched creators, creator's uploaded videos, and other relevant content.
+  Future<UnifiedSearchResult> searchUnified(String query, {int limit = 20});
 }

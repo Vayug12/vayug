@@ -1829,7 +1829,7 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
                     _buildLikeButton(video, index,
                         sizeScale: actionSizeScale),
                     AppSpacing.vSpace12,
-                    _buildAudioDubbingButton(video, index,
+                    _buildSaveButton(video, index,
                         sizeScale: actionSizeScale),
                     AppSpacing.vSpace12,
                     _buildVerticalActionButton(
@@ -2059,6 +2059,25 @@ extension _VideoFeedUI on _VideoFeedAdvancedState {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildSaveButton(VideoModel video, int index,
+      {double sizeScale = 1.0}) {
+    final isSavedVN =
+        _getOrCreateNotifier<bool>(_isSavedVN, video.id, video.isSaved);
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: isSavedVN,
+      builder: (context, isSaved, _) {
+        return _buildVerticalActionButton(
+          icon:
+              isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          onTap: () => _handleSave(video),
+          color: isSaved ? AppColors.primary : AppColors.white,
+          sizeScale: sizeScale,
         );
       },
     );

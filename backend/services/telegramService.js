@@ -15,11 +15,11 @@ class TelegramService {
   }
 
   _getToken() {
-    return this.botToken || process.env.TELEGRAM_BOT_TOKEN;
+    return process.env.TELEGRAM_BOT_TOKEN || this.botToken;
   }
 
   _getUsername() {
-    return this.botUsername || process.env.TELEGRAM_BOT_USERNAME || 'vayug_bot';
+    return process.env.TELEGRAM_BOT_USERNAME || this.botUsername || 'vayug_bot';
   }
 
   /**
@@ -27,7 +27,10 @@ class TelegramService {
    */
   async _callTelegramApi(method, payload) {
     const token = this._getToken();
-    if (!token) return null;
+    if (!token) {
+      console.error(`Telegram API [${method}] skipped: bot token is not configured`);
+      return { ok: false, description: 'Bot token is not configured' };
+    }
 
     try {
       const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -35,7 +38,11 @@ class TelegramService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      return await response.json();
+      const result = await response.json();
+      if (!response.ok || result?.ok !== true) {
+        console.error(`Telegram API [${method}] rejected:`, result?.description || `HTTP ${response.status}`);
+      }
+      return result;
     } catch (err) {
       console.error(`❌ Telegram API [${method}] Error:`, err.message);
       return null;
@@ -93,8 +100,8 @@ class TelegramService {
    * Process incoming Telegram webhook updates
    */
   async handleWebhookUpdate(update, secretTokenHeader) {
-    // Optional secret verification
-    if (this.webhookSecret && secretTokenHeader && secretTokenHeader !== this.webhookSecret) {
+    const expectedSecret = this.webhookSecret || process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!expectedSecret || !this._matchesSecret(secretTokenHeader, expectedSecret)) {
       return { ok: false, error: 'Unauthorized webhook' };
     }
 
@@ -133,6 +140,15 @@ class TelegramService {
         return { ok: true };
       }
 
+      const confirmation = await this._callTelegramApi('sendMessage', {
+        chat_id: chatId,
+        parse_mode: 'HTML',
+        text: `🎉 <b>Connected Successfully!</b>\n\nYour Vayu creator account is now linked. You will receive instant notifications whenever someone comments on your videos.`
+      });
+      if (confirmation?.ok !== true) {
+        throw new Error(confirmation?.description || 'Telegram rejected the connection confirmation');
+      }
+
       creatorDoc.chatId = chatId;
       creatorDoc.username = tgUsername;
       creatorDoc.isConnected = true;
@@ -142,15 +158,17 @@ class TelegramService {
 
       // Invalidate memory cache
       this.localCache.delete(creatorDoc.user.toString());
-
-      await this._callTelegramApi('sendMessage', {
-        chat_id: chatId,
-        parse_mode: 'HTML',
-        text: `🎉 <b>Connected Successfully!</b>\n\nYour Vayu creator account is now linked. You will receive instant notifications whenever someone comments on your videos.`
-      });
     }
 
     return { ok: true };
+  }
+
+  _matchesSecret(provided, expected) {
+    if (!provided || !expected) return false;
+    const providedBuffer = Buffer.from(String(provided));
+    const expectedBuffer = Buffer.from(String(expected));
+    return providedBuffer.length === expectedBuffer.length
+      && crypto.timingSafeEqual(providedBuffer, expectedBuffer);
   }
 
   /**
@@ -179,12 +197,15 @@ class TelegramService {
         `<a href="https://snehayog.site/video/${videoId}">🔗 Open in Vayu</a>`
       ].join('\n');
 
-      await this._callTelegramApi('sendMessage', {
+      const result = await this._callTelegramApi('sendMessage', {
         chat_id: doc.chatId,
         parse_mode: 'HTML',
         text: messageHtml,
         disable_web_page_preview: true
       });
+      if (result?.ok !== true) {
+        throw new Error(result?.description || 'Telegram rejected the notification');
+      }
     } catch (err) {
       console.error('⚠️ Failed to dispatch Telegram notification:', err.message);
     }

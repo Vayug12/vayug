@@ -157,6 +157,14 @@ export const updateVideo = async (req, res) => {
     }
 
     const videoObj = video.toObject();
+    if (video.seriesId) {
+      try {
+        const episodes = await Video.find({ seriesId: video.seriesId, processingStatus: 'completed' })
+          .select('_id videoName thumbnailUrl episodeNumber seriesId duration')
+          .sort({ episodeNumber: 1 }).lean();
+        videoObj.episodes = episodes.map(ep => ({ ...ep, _id: ep._id.toString() }));
+      } catch (err) {}
+    }
     const transformedVideo = serializeVideo(videoObj, req.apiVersion, user._id.toString(), req.traceId);
 
     res.json({ 
@@ -249,12 +257,15 @@ export const updateVideoSeries = async (req, res) => {
         `videos:user:${googleId}`,
         VideoCacheKeys.all(),
         VideoCacheKeys.single(videoId),
-        `video:data:${videoId}`
+        `video:data:${videoId}`,
+        `video:data:v2:${videoId}`,
+        'user:feed:*'
       ];
 
       uniqueVideoIds.forEach(id => {
         keysToInvalidate.push(VideoCacheKeys.single(id.toString()));
         keysToInvalidate.push(`video:data:${id.toString()}`);
+        keysToInvalidate.push(`video:data:v2:${id.toString()}`);
       });
       
       await invalidateCache(keysToInvalidate);

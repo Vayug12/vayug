@@ -6,6 +6,7 @@ import 'package:vayug/shared/utils/app_logger.dart';
 
 class ReportService {
   final AuthService _authService = AuthService();
+  String? lastErrorMessage;
 
   Future<bool> submitReport({
     required String targetType, // e.g., 'video' or 'user'
@@ -13,7 +14,13 @@ class ReportService {
     required String reason, // e.g., 'spam', 'abuse', 'copyright'
     String? details,
   }) async {
+    lastErrorMessage = null;
     try {
+      if (targetId.trim().isEmpty) {
+        lastErrorMessage = 'Missing target identifier.';
+        return false;
+      }
+
       // Get base URL with fallback (async)
       final baseUrl = await AppConfig.getBaseUrlWithFallback();
 
@@ -63,14 +70,20 @@ class ReportService {
       // Log error response
       try {
         final errorData = json.decode(response.body);
+        lastErrorMessage = errorData['error'] ??
+            errorData['details'] ??
+            errorData['message'] ??
+            'Failed to submit report (${response.statusCode})';
         AppLogger.log('❌ ReportService: Error response: $errorData');
       } catch (_) {
+        lastErrorMessage = 'Server returned error (${response.statusCode})';
         AppLogger.log(
             '❌ ReportService: Error response (not JSON): ${response.body}');
       }
 
       return false;
     } catch (e) {
+      lastErrorMessage = 'Connection error. Please try again.';
       AppLogger.log('❌ ReportService: Exception submitting report: $e');
       return false;
     }

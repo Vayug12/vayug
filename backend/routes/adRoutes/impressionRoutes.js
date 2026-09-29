@@ -1,14 +1,25 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import rateLimit from 'express-rate-limit';
 import AdCreative from '../../models/AdCreative.js';
 import AdImpression from '../../models/AdImpression.js';
 import User from '../../models/User.js';
 import Video from '../../models/Video.js'; // Import Video model to fetch creatorId
 import { recordCreativeCounter, recordCreatorEarning, recordCampaignSpend } from '../../services/adServices/adStatsBuffer.js';
 import { renderedMatch, billableMatch } from '../../services/adServices/impressionCounting.js';
+import { verifyToken } from '../../utils/verifytoken.js';
 
 const router = express.Router();
 const DAILY_VIEW_FREQUENCY_CAP = 3;
+
+// **SECURITY: Rate limiter for billable ad views to prevent brute-force / bot spamming**
+const adViewLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // max 30 ad view tracks per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many ad view requests, please try again later' }
+});
 
 // **OPTIMIZATION: In-memory cache for Google ID to Mongo ObjectID mapping**
 // This reduces redundant User.findOne calls which were taking ~95ms each
@@ -413,20 +424,21 @@ router.get('/impressions/video/:videoId/carousel', async (req, res) => {
 });
 
 // **NEW: POST /ads/impressions/banner/view - Track banner ad view (minimum 2-3 seconds)**
-router.post('/impressions/banner/view', async (req, res) => {
+// **SECURITY: Protected with rate limiting and verified token authentication**
+router.post('/impressions/banner/view', adViewLimiter, verifyToken, async (req, res) => {
   try {
-    const { videoId, adId, userId, viewDuration, creatorId: providedCreatorId } = req.body;
-    // **FIXED: Normalize userId (Google ID to MongoDB ObjectId)**
-    const normalizedUserId = await normalizeUserId(userId);
-    if (userId && !normalizedUserId) {
-      // Minimal logging
+    const { videoId, adId, viewDuration, creatorId: providedCreatorId } = req.body;
+
+    // **SECURITY: Strictly take identity from verified JWT token, never from untrusted req.body**
+    const tokenUserId = req.user?.googleId || req.user?.id || req.user?._id;
+    if (!tokenUserId) {
+      return res.status(401).json({ error: 'Authentication required to track ad views' });
     }
 
-    // console.log('👁️ Tracking banner ad VIEW (minimum duration):');
-    // console.log('   Video ID:', videoId);
-    // console.log('   Ad ID:', adId);
-    // console.log('   User ID:', userId);
-    // console.log('   View Duration:', viewDuration);
+    const normalizedUserId = await normalizeUserId(tokenUserId);
+    if (!normalizedUserId) {
+      return res.status(401).json({ error: 'Valid authenticated user account required' });
+    }
 
     if (!adId || !videoId) {
       return res.status(400).json({ error: 'Ad ID and Video ID are required' });
@@ -441,72 +453,75 @@ router.post('/impressions/banner/view', async (req, res) => {
       });
     }
 
-    let dailyViewCount = 0;
-    if (normalizedUserId) {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      dailyViewCount = await AdImpression.countDocuments({
-        videoId: videoId,
-        adId: adId,
-        userId: normalizedUserId,
-        adType: 'banner',
-        ...billableMatch(),
-        timestamp: { $gte: startOfDay }
-      });
+    // **FREQUENCY CAPPING: Max DAILY_VIEW_FREQUENCY_CAP views per user, per video, per ad per day**
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const dailyViewCount = await AdImpression.countDocuments({
+      videoId: videoId,
+      adId: adId,
+      userId: normalizedUserId,
+      adType: 'banner',
+      ...billableMatch(),
+      timestamp: { $gte: startOfDay }
+    });
 
-      if (dailyViewCount >= DAILY_VIEW_FREQUENCY_CAP) {
-        return res.status(200).json({
-          success: false,
-          message: 'Daily ad view cap reached for this user',
-          dailyViews: dailyViewCount,
-          frequencyCap: DAILY_VIEW_FREQUENCY_CAP
-        });
-      }
+    if (dailyViewCount >= DAILY_VIEW_FREQUENCY_CAP) {
+      return res.status(200).json({
+        success: false,
+        message: 'Daily ad view cap reached for this user on this video',
+        dailyViews: dailyViewCount,
+        frequencyCap: DAILY_VIEW_FREQUENCY_CAP
+      });
     }
 
-      // **OPTIMIZATION: Get creatorId from request or fetch from Video**
-      let creatorId = providedCreatorId;
-      
-      if (!creatorId) {
-        const video = await Video.findById(videoId).select('uploader').lean();
-        creatorId = video ? video.uploader : null;
-      }
+    // **OPTIMIZATION: Get creatorId from request or fetch from Video**
+    let creatorId = providedCreatorId;
+    if (!creatorId) {
+      const video = await Video.findById(videoId).select('uploader').lean();
+      creatorId = video ? video.uploader : null;
+    }
 
-      // **NEW: PREVENT SELF-VIEW**
-      if (normalizedUserId && creatorId && normalizedUserId.toString() === creatorId.toString()) {
-        return res.status(200).json({ 
-          success: true,
-          message: 'Self-view ignored',
-          ignored: true 
-        });
-      }
+    // **SECURITY: PREVENT SELF-VIEW (Creator viewing own video)**
+    const isSelfView = creatorId && (
+      (normalizedUserId && normalizedUserId.toString() === creatorId.toString()) ||
+      (req.user?.googleId && req.user.googleId.toString() === creatorId.toString()) ||
+      (req.user?._id && req.user._id.toString() === creatorId.toString())
+    );
 
-      // Create new viewed impression record
-      await AdImpression.create({
-        videoId: videoId,
-        adId: adId,
-        userId: normalizedUserId,
-        creatorId: creatorId, // **NEW: Save creatorId for fast lookup**
-        adType: 'banner',
-        impressionType: 'view',
-        isViewed: true,
-        viewDuration: viewDuration,
-        viewCount: 1,
-        frequencyCap: DAILY_VIEW_FREQUENCY_CAP,
-        timestamp: new Date()
+    if (isSelfView) {
+      return res.status(200).json({ 
+        success: true,
+        message: 'Self-view ignored',
+        ignored: true 
       });
-      
-      // Increment views on AdCreative (buffered $inc, flushed in batches)
-      recordCreativeCounter(adId, 'views');
+    }
 
-      bookDeliveredView(creatorId, adId, 'banner');
+    // Create new viewed impression record
+    await AdImpression.create({
+      videoId: videoId,
+      adId: adId,
+      userId: normalizedUserId,
+      creatorId: creatorId,
+      adType: 'banner',
+      impressionType: 'view',
+      isViewed: true,
+      viewDuration: viewDuration,
+      viewCount: 1,
+      frequencyCap: DAILY_VIEW_FREQUENCY_CAP,
+      timestamp: new Date()
+    });
+    
+    // Increment views on AdCreative (buffered $inc, flushed in batches)
+    recordCreativeCounter(adId, 'views');
+
+    bookDeliveredView(creatorId, adId, 'banner');
 
     res.status(200).json({ 
       success: true,
       message: 'Banner ad view tracked successfully',
       viewDuration: viewDuration,
-      dailyViews: normalizedUserId ? dailyViewCount + 1 : undefined,
-      frequencyCap: normalizedUserId ? DAILY_VIEW_FREQUENCY_CAP : undefined
+      dailyViews: dailyViewCount + 1,
+      frequencyCap: DAILY_VIEW_FREQUENCY_CAP
     });
   } catch (error) {
     console.error('❌ Error tracking banner ad view:', error);
@@ -518,20 +533,21 @@ router.post('/impressions/banner/view', async (req, res) => {
 });
 
 // **NEW: POST /ads/impressions/carousel/view - Track carousel ad view (minimum 2-3 seconds)**
-router.post('/impressions/carousel/view', async (req, res) => {
+// **SECURITY: Protected with rate limiting and verified token authentication**
+router.post('/impressions/carousel/view', adViewLimiter, verifyToken, async (req, res) => {
   try {
-    const { videoId, adId, userId, viewDuration, creatorId: providedCreatorId } = req.body;
-    // **FIXED: Normalize userId (Google ID to MongoDB ObjectId)**
-    const normalizedUserId = await normalizeUserId(userId);
-    if (userId && !normalizedUserId) {
-      // Minimal logging
+    const { videoId, adId, viewDuration, creatorId: providedCreatorId } = req.body;
+
+    // **SECURITY: Strictly take identity from verified JWT token, never from untrusted req.body**
+    const tokenUserId = req.user?.googleId || req.user?.id || req.user?._id;
+    if (!tokenUserId) {
+      return res.status(401).json({ error: 'Authentication required to track ad views' });
     }
 
-    // console.log('👁️ Tracking carousel ad VIEW (minimum duration):');
-    // console.log('   Video ID:', videoId);
-    // console.log('   Ad ID:', adId);
-    // console.log('   User ID:', userId);
-    // console.log('   View Duration:', viewDuration);
+    const normalizedUserId = await normalizeUserId(tokenUserId);
+    if (!normalizedUserId) {
+      return res.status(401).json({ error: 'Valid authenticated user account required' });
+    }
 
     if (!adId || !videoId) {
       return res.status(400).json({ error: 'Ad ID and Video ID are required' });
@@ -546,71 +562,74 @@ router.post('/impressions/carousel/view', async (req, res) => {
       });
     }
 
-    let dailyViewCount = 0;
-    if (normalizedUserId) {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      dailyViewCount = await AdImpression.countDocuments({
-        videoId: videoId,
-        adId: adId,
-        userId: normalizedUserId,
-        adType: 'carousel',
-        ...billableMatch(),
-        timestamp: { $gte: startOfDay }
-      });
+    // **FREQUENCY CAPPING: Max DAILY_VIEW_FREQUENCY_CAP views per user, per video, per ad per day**
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const dailyViewCount = await AdImpression.countDocuments({
+      videoId: videoId,
+      adId: adId,
+      userId: normalizedUserId,
+      adType: 'carousel',
+      ...billableMatch(),
+      timestamp: { $gte: startOfDay }
+    });
 
-      if (dailyViewCount >= DAILY_VIEW_FREQUENCY_CAP) {
-        return res.status(200).json({
-          success: false,
-          message: 'Daily ad view cap reached for this user',
-          dailyViews: dailyViewCount,
-          frequencyCap: DAILY_VIEW_FREQUENCY_CAP
-        });
-      }
+    if (dailyViewCount >= DAILY_VIEW_FREQUENCY_CAP) {
+      return res.status(200).json({
+        success: false,
+        message: 'Daily ad view cap reached for this user on this video',
+        dailyViews: dailyViewCount,
+        frequencyCap: DAILY_VIEW_FREQUENCY_CAP
+      });
     }
 
-      // **OPTIMIZATION: Get creatorId from request or fetch from Video**
-      let creatorId = providedCreatorId;
-      
-      if (!creatorId) {
-        const video = await Video.findById(videoId).select('uploader').lean();
-        creatorId = video ? video.uploader : null;
-      }
+    // **OPTIMIZATION: Get creatorId from request or fetch from Video**
+    let creatorId = providedCreatorId;
+    if (!creatorId) {
+      const video = await Video.findById(videoId).select('uploader').lean();
+      creatorId = video ? video.uploader : null;
+    }
 
-      // **NEW: PREVENT SELF-VIEW**
-      if (normalizedUserId && creatorId && normalizedUserId.toString() === creatorId.toString()) {
-        return res.status(200).json({ 
-          success: true,
-          message: 'Self-view ignored',
-          ignored: true 
-        });
-      }
+    // **SECURITY: PREVENT SELF-VIEW (Creator viewing own video)**
+    const isSelfView = creatorId && (
+      (normalizedUserId && normalizedUserId.toString() === creatorId.toString()) ||
+      (req.user?.googleId && req.user.googleId.toString() === creatorId.toString()) ||
+      (req.user?._id && req.user._id.toString() === creatorId.toString())
+    );
 
-      await AdImpression.create({
-        videoId: videoId,
-        adId: adId,
-        userId: normalizedUserId,
-        creatorId: creatorId, // **NEW: Save creatorId for fast lookup**
-        adType: 'carousel',
-        impressionType: 'scroll_view',
-        isViewed: true,
-        viewDuration: viewDuration,
-        viewCount: 1,
-        frequencyCap: DAILY_VIEW_FREQUENCY_CAP,
-        timestamp: new Date()
+    if (isSelfView) {
+      return res.status(200).json({ 
+        success: true,
+        message: 'Self-view ignored',
+        ignored: true 
       });
-      
-      // Increment views on AdCreative (buffered $inc, flushed in batches)
-      recordCreativeCounter(adId, 'views');
+    }
 
-      bookDeliveredView(creatorId, adId, 'carousel');
+    await AdImpression.create({
+      videoId: videoId,
+      adId: adId,
+      userId: normalizedUserId,
+      creatorId: creatorId,
+      adType: 'carousel',
+      impressionType: 'scroll_view',
+      isViewed: true,
+      viewDuration: viewDuration,
+      viewCount: 1,
+      frequencyCap: DAILY_VIEW_FREQUENCY_CAP,
+      timestamp: new Date()
+    });
+    
+    // Increment views on AdCreative (buffered $inc, flushed in batches)
+    recordCreativeCounter(adId, 'views');
+
+    bookDeliveredView(creatorId, adId, 'carousel');
 
     res.status(200).json({ 
       success: true,
       message: 'Carousel ad view tracked successfully',
       viewDuration: viewDuration,
-      dailyViews: normalizedUserId ? dailyViewCount + 1 : undefined,
-      frequencyCap: normalizedUserId ? DAILY_VIEW_FREQUENCY_CAP : undefined
+      dailyViews: dailyViewCount + 1,
+      frequencyCap: DAILY_VIEW_FREQUENCY_CAP
     });
   } catch (error) {
     console.error('❌ Error tracking carousel ad view:', error);

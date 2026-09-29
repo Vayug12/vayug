@@ -11,7 +11,12 @@ import { logger } from '../../middleware/traceMiddleware.js';
 export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceId = 'internal') => {
   if (!video) return null;
 
+  const rawEpisodes = video.episodes || (video._doc && video._doc.episodes);
   const videoObj = video.toObject ? video.toObject() : video;
+  if (rawEpisodes && (!videoObj.episodes || videoObj.episodes.length === 0)) {
+    videoObj.episodes = rawEpisodes;
+  }
+
   const dubbedUrls =
     videoObj.dubbedUrls instanceof Map
       ? Object.fromEntries(videoObj.dubbedUrls.entries())
@@ -49,12 +54,23 @@ export const serializeVideo = (video, apiVersion, requestingUserObjectId, traceI
       : (videoObj.link && String(videoObj.link).trim() ? [{ title: '', url: String(videoObj.link).trim(), showAtSeconds: 0 }] : []),
     uploadedAt: (videoObj.uploadedAt || videoObj.createdAt)?.toISOString ? (videoObj.uploadedAt || videoObj.createdAt).toISOString() : (videoObj.uploadedAt || videoObj.createdAt),
     isLiked: isLiked,
+    isSaved: videoObj.isSaved === true,
     earnings: parseFloat(videoObj.earnings) || 0.0,
     hlsPlaylistUrl: cloudflareR2Service.getPublicUrl(videoObj.hlsPlaylistUrl || ''),
     lowQualityUrl: cloudflareR2Service.getPublicUrl(videoObj.lowQualityUrl || ''),
     seriesId: videoObj.seriesId || null,
-    episodeNumber: videoObj.episodeNumber || 0,
-    episodes: videoObj.episodes || [],
+    episodeNumber: parseInt(videoObj.episodeNumber) || 0,
+    episodes: Array.isArray(videoObj.episodes)
+      ? videoObj.episodes.map(ep => ({
+          _id: (ep._id || ep.id)?.toString(),
+          id: (ep.id || ep._id)?.toString(),
+          videoName: ep.videoName || 'Untitled Episode',
+          thumbnailUrl: cloudflareR2Service.getPublicUrl(ep.thumbnailUrl || ''),
+          episodeNumber: parseInt(ep.episodeNumber) || 0,
+          seriesId: ep.seriesId || videoObj.seriesId || null,
+          duration: parseInt(ep.duration) || 0
+        }))
+      : [],
     dubbedUrls: dubbedUrls,
     quizzes: videoObj.quizzes || [],
     isSubscriberOnly: videoObj.isSubscriberOnly === true,

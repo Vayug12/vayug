@@ -24,4 +24,14 @@ export class ISearchProvider {
   async searchCreators(query, limit) {
     throw new Error('searchCreators() not implemented');
   }
+
+  /**
+   * Unified search returning creators, creator's own uploads, and relevant content.
+   * @param {string} query The search query string
+   * @param {number} limit Maximum results to return
+   * @returns {Promise<{creators: Array<Object>, creatorVideos: Array<Object>, videos: Array<Object>}>}
+   */
+  async searchUnified(query, limit) {
+    throw new Error('searchUnified() not implemented');
+  }
 }

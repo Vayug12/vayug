@@ -1980,6 +1980,12 @@ class _VayuLongFormPlayerScreenState
   }
 
   void _openReportDialog() {
+    if (_videos.isEmpty || _currentIndex >= _videos.length) return;
+    final videoId = _videos[_currentIndex].id;
+    if (videoId.trim().isEmpty) {
+      _showSnackBar('Cannot report this video.', type: VayuSnackBarType.error);
+      return;
+    }
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     VayuBottomSheet.show(
@@ -1990,7 +1996,7 @@ class _VayuLongFormPlayerScreenState
           ? const EdgeInsets.fromLTRB(14, 0, 14, 10)
           : const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: ReportDialogWidget(
-          targetType: 'video', targetId: _videos[_currentIndex].id),
+          targetType: 'video', targetId: videoId),
     );
   }
 

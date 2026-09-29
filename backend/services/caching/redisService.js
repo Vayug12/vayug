@@ -243,30 +243,77 @@ class RedisService {
   }
 
   async bfMAdd(key, items) {
-    if (!this._canUseRedis() || !items || items.length === 0) return false;
-    // Switch to Redis Sets: Key prefix change to avoid type conflict with old Bitsets
+    if (!items || items.length === 0) return false;
     const setKey = key.replace('bf_', 'user:seen_v2:'); 
+    
+    // Always store in process memory for zero-latency, zero-cost fallback
+    if (!this._memorySets) this._memorySets = new Map();
+    let memSet = this._memorySets.get(setKey);
+    if (!memSet) {
+      memSet = new Set();
+      this._memorySets.set(setKey, memSet);
+    }
+    for (const item of items) {
+      if (item) memSet.add(String(item));
+    }
+    // Cap memory set size per user to 2500 entries to prevent RAM bloat
+    if (memSet.size > 2500) {
+      const excess = memSet.size - 2500;
+      const iter = memSet.values();
+      for (let i = 0; i < excess; i++) memSet.delete(iter.next().value);
+    }
+
+    if (!this._canUseRedis()) return true;
     try {
       // SADD with multiple members counts as 1 request on Upstash
       await this.client.sadd(setKey, ...items);
       await this.client.expire(setKey, 30 * 24 * 60 * 60); // 30 days retention
       return true;
     } catch (error) { 
-      return false; 
+      return true; // Kept in memory set successfully
     }
   }
 
   async bfMExists(key, items) {
-    if (!this._canUseRedis() || !items || items.length === 0) return items.map(() => false);
+    if (!items || items.length === 0) return [];
     const setKey = key.replace('bf_', 'user:seen_v2:');
-    try {
-      // SMISMEMBER counts as 1 request and checks all IDs at once
-      const results = await this.client.smismember(setKey, ...items);
-      return results.map(r => r === 1);
-    } catch (error) { 
-      // Fallback: If SMISMEMBER fails (old Redis version), return all false
-      return items.map(() => false); 
+    const memSet = this._memorySets?.get(setKey);
+    
+    const results = new Array(items.length).fill(false);
+    const needRedisCheck = [];
+    const needRedisIndices = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const itemStr = items[i] ? String(items[i]) : null;
+      if (!itemStr) continue;
+      if (memSet && memSet.has(itemStr)) {
+        results[i] = true;
+      } else {
+        needRedisCheck.push(items[i]);
+        needRedisIndices.push(i);
+      }
     }
+
+    if (needRedisCheck.length === 0 || !this._canUseRedis()) {
+      return results;
+    }
+
+    try {
+      // SMISMEMBER counts as 1 request and checks all remaining IDs at once
+      const redisResults = await this.client.smismember(setKey, ...needRedisCheck);
+      redisResults.forEach((r, idx) => {
+        if (r === 1) {
+          const originalIdx = needRedisIndices[idx];
+          results[originalIdx] = true;
+          // Backfill memory set
+          if (memSet) memSet.add(String(needRedisCheck[idx]));
+        }
+      });
+    } catch (error) { 
+      // Memory set results already populated
+    }
+
+    return results;
   }
 
   // --- APP SPECIFIC HELPERS ---

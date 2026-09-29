@@ -183,4 +183,67 @@ class SearchServiceImpl implements ISearchService {
       return SearchSuggestions.empty;
     }
   }
+
+  @override
+  Future<UnifiedSearchResult> searchUnified(String query, {int limit = 20}) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const UnifiedSearchResult();
+
+    final baseUrl = await _getBaseUrl();
+    final uri = Uri.parse('$baseUrl/api/search/unified').replace(
+      queryParameters: <String, String>{
+        'q': trimmed,
+        'limit': '$limit',
+      },
+    );
+
+    AppLogger.log('🔍 SearchServiceImpl: searchUnified q="$trimmed"');
+
+    try {
+      final res = await httpClientService.withRequestContext(
+        feature: 'search',
+        uiAction: 'submit',
+        screen: 'search',
+        request: () => httpClientService.get(
+          uri,
+          headers: const {'Content-Type': 'application/json'},
+          timeout: const Duration(seconds: 10),
+        ),
+      );
+
+      if (res.statusCode != 200) {
+        AppLogger.log('❌ SearchServiceImpl: searchUnified status=${res.statusCode}');
+        // Fallback to separate calls if unified route fails or is not available
+        final creators = await searchCreators(trimmed, limit: limit);
+        final videos = await searchVideos(trimmed, limit: limit);
+        return UnifiedSearchResult(creators: creators, creatorVideos: [], videos: videos);
+      }
+
+      final data = json.decode(res.body) as Map<String, dynamic>;
+      final rawCreators = data['creators'] as List<dynamic>? ?? [];
+      final rawCreatorVideos = data['creatorVideos'] as List<dynamic>? ?? [];
+      final rawVideos = data['videos'] as List<dynamic>? ?? [];
+
+      final creators = rawCreators
+          .map((e) => UserModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(growable: false);
+
+      final creatorVideos = rawCreatorVideos
+          .map((e) => VideoModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(growable: false);
+
+      final videos = rawVideos
+          .map((e) => VideoModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(growable: false);
+
+      return UnifiedSearchResult(
+        creators: creators,
+        creatorVideos: creatorVideos,
+        videos: videos,
+      );
+    } catch (e) {
+      AppLogger.log('❌ SearchServiceImpl: searchUnified exception: $e');
+      return const UnifiedSearchResult();
+    }
+  }
 }

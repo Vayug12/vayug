@@ -7,6 +7,21 @@ import {
   isVideoEligibleForProfession,
   withProfessionEligibility,
 } from '../audienceEligibilityService.js';
+import { FeedOrchestrator } from '../../../packages/recsys-core/index.js';
+
+export const recsysOrchestrator = new FeedOrchestrator({
+  seenStore: {
+    markSeen: async (userKey, ids) => {
+      await redisService.bfMAdd(`user:bf_seen:${userKey}`, ids);
+      return true;
+    },
+    hasSeen: async (userKey, ids) => {
+      return await redisService.bfMExists(`user:bf_seen:${userKey}`, ids);
+    },
+    clear: async () => true,
+  },
+  diversity: { minSpacing: 3 },
+});
 
 /**
  * Feed Queue Service
@@ -266,12 +281,9 @@ class FeedQueueService {
               const randomized = RecommendationService.weightedShuffle(finalBatch, this.BATCH_SIZE);
               const ordered = await RecommendationService.orderFeedWithDiversity(randomized, { minCreatorSpacing: 4 });
               const pushIds = ordered.map(v => v._id.toString());
-              const hashes = ordered.map(v => v.videoHash).filter(Boolean);
               await Promise.all([
                 redisService.rPush(queueKey, pushIds),
                 redisService.lTrim(queueKey, 0, this.QUEUE_SIZE_LIMIT - 1),
-                redisService.bfMAdd(bfSeenKey, pushIds),
-                hashes.length > 0 ? redisService.bfMAdd(bfHashKey, hashes) : Promise.resolve(),
               ]);
           }
       }
@@ -310,7 +322,7 @@ class FeedQueueService {
 
       if (candidates.length > 0) {
           let filtered = candidates;
-          if (redisAvailable) {
+          if (userId && userId !== 'anon' && userId !== 'undefined') {
             const sFlags = await redisService.bfMExists(`user:bf_seen:${userId}`, candidates.map(v => v._id.toString()));
             filtered = candidates.filter((v, i) => !sFlags[i]);
           }

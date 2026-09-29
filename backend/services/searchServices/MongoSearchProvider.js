@@ -12,82 +12,97 @@ export default class MongoSearchProvider extends ISearchProvider {
    * @param {number} limit
    * @returns {Promise<Array>} Normalized videos
    */
+  /**
+   * Search for videos prioritizing creator-owned uploads if a creator name matches,
+   * followed by content-matching videos from other creators.
+   * @param {string} query
+   * @param {number} limit
+   * @returns {Promise<Array>} Normalized videos
+   */
   async searchVideos(query, limit) {
     const q = query.trim();
     if (!q) return [];
 
-    console.log(`🔍 MongoSearchProvider: Querying videos for "${q}"`);
+    const unified = await this.searchUnified(q, limit);
+    return [...unified.creatorVideos, ...unified.videos].slice(0, limit);
+  }
+
+  /**
+   * Unified search returning creators, creator's own uploads, and relevant content.
+   * Eliminates random un-related video matches.
+   * @param {string} query
+   * @param {number} limit
+   * @returns {Promise<{creators: Array, creatorVideos: Array, videos: Array}>}
+   */
+  async searchUnified(query, limit) {
+    const q = query.trim();
+    if (!q) return { creators: [], creatorVideos: [], videos: [] };
+
+    console.log(`🔍 MongoSearchProvider: Executing unified search for "${q}"`);
 
     try {
-      // Atlas Compound text search (Content-Aware)
-      console.log(`🔎 MongoSearchProvider: Executing Content-Aware Text Search...`);
-      const textVideos = await Video.aggregate([
-        {
-          $search: {
-            index: 'default',
-            compound: {
-              should: [
-                {
-                  text: { query: q, path: 'videoName', score: { boost: { value: 5 } } }
-                },
-                {
-                  text: { query: q, path: 'videoName', fuzzy: { maxEdits: 1, prefixLength: 1 }, score: { boost: { value: 2 } } }
-                },
-                {
-                  text: { query: q, path: 'aiContext', score: { boost: { value: 4 } } }
-                },
-                {
-                  text: { query: q, path: 'aiContext', fuzzy: { maxEdits: 1, prefixLength: 2 }, score: { boost: { value: 2 } } }
-                },
-                {
-                  text: { query: q, path: 'description', score: { boost: { value: 3 } } }
-                },
-                {
-                  text: { query: q, path: 'tags', score: { boost: { value: 2 } } }
-                },
-                {
-                  text: { query: q, path: 'category', score: { boost: { value: 1.5 } } }
-                },
-                {
-                  text: { query: q, path: 'keywords', score: { boost: { value: 1 } } }
-                }
-              ],
-              minimumShouldMatch: 1
-            }
-          }
-        },
-        { $match: { processingStatus: 'completed' } },
-        { $limit: limit },
-        {
-          $addFields: { searchType: 'text', searchScore: { $meta: 'searchScore' } }
-        }
-      ]);
+      // 1. Search for matching creators/channels
+      const creators = await this.searchCreators(q, 5);
 
-      // Populate uploader details for the results
-      await Video.populate(textVideos, { path: 'uploader', select: '_id googleId name profilePic' });
+      // 2. If creators match, fetch videos uploaded by these specific creators
+      let creatorVideos = [];
+      const creatorIds = creators
+        .map(c => c._id)
+        .filter(id => id != null);
 
-      return textVideos.map(v => ({
-        ...v,
-        id: v._id.toString()
-      }));
+      if (creatorIds.length > 0) {
+        console.log(`🎯 MongoSearchProvider: Found ${creatorIds.length} matched creator(s). Fetching their uploads...`);
+        const rawCreatorVideos = await Video.find({
+          uploader: { $in: creatorIds },
+          processingStatus: 'completed'
+        })
+        .limit(limit)
+        .populate('uploader', 'googleId name profilePic')
+        .sort({ uploadedAt: -1 })
+        .lean();
 
-    } catch (err) {
-      console.error('❌ MongoSearchProvider Search Error (videos):', err);
-      
-      // Fallback to basic case-insensitive regex search
-      const fallback = await Video.find({
-        videoName: { $regex: q, $options: 'i' },
-        processingStatus: 'completed'
+        creatorVideos = rawCreatorVideos.map(v => ({
+          ...v,
+          id: v._id.toString()
+        }));
+      }
+
+      // 3. Search for other relevant videos matching title/description/tags
+      // Exclude videos already included in creatorVideos
+      const existingVideoIds = creatorVideos.map(v => v._id);
+
+      const regexEscaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(regexEscaped, 'i');
+
+      const rawOtherVideos = await Video.find({
+        _id: { $nin: existingVideoIds },
+        processingStatus: 'completed',
+        $or: [
+          { videoName: searchRegex },
+          { description: searchRegex },
+          { tags: searchRegex },
+          { category: searchRegex }
+        ]
       })
       .limit(limit)
       .populate('uploader', 'googleId name profilePic')
-      .sort({ uploadedAt: -1 })
+      .sort({ views: -1, uploadedAt: -1 })
       .lean();
 
-      return fallback.map(v => ({
+      const otherVideos = rawOtherVideos.map(v => ({
         ...v,
         id: v._id.toString()
       }));
+
+      return {
+        creators,
+        creatorVideos,
+        videos: otherVideos
+      };
+
+    } catch (err) {
+      console.error('❌ MongoSearchProvider unified search error:', err);
+      return { creators: [], creatorVideos: [], videos: [] };
     }
   }
 

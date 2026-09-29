@@ -172,11 +172,10 @@ const enumOr = (value, allowed, fallback) => (
  */
 export const buildAdSpec = (body, { googleId, userObjectId }) => {
   const title = trimmed(body.title);
-  const description = trimmed(body.description);
-  const adType = trimmed(body.adType);
+  const description = trimmed(body.description) || title || 'Sponsored';
+  const adType = trimmed(body.adType) || 'banner';
 
   if (!title) throw new AdValidationError('title is required', 'title');
-  if (!description) throw new AdValidationError('description is required', 'description');
   if (!AD_TYPES.has(adType)) {
     throw new AdValidationError(
       `adType must be one of: ${[...AD_TYPES].join(', ')}`,
@@ -317,33 +316,23 @@ export const buildAdSpec = (body, { googleId, userObjectId }) => {
     dailyBudget,
     totalBudget: budget,
     spentINR: 0,
-    bidType: enumOr(body.bidType, ['CPM', 'CPC'], AD_CONFIG.DEFAULT_BID_TYPE || 'CPM'),
+    bidType: 'CPM',
     cpmINR,
     target: {
-      age: {
-        min: clampInt(body.minAge, 13, 65, 18),
-        max: clampInt(body.maxAge, 13, 65, 65)
-      },
-      gender: enumOr(body.gender, ['all', 'male', 'female', 'other'], 'all'),
-      locations: stringList(body.locations),
-      interests: stringList(body.interests),
-      platforms: stringList(body.platforms).filter((p) => ['android', 'ios', 'web'].includes(p)),
-      deviceType: enumOr(body.deviceType, ['mobile', 'tablet', 'desktop', 'all'], 'all')
+      age: { min: 18, max: 65 },
+      gender: 'all',
+      locations: [],
+      interests: [],
+      platforms: ['android', 'ios', 'web'],
+      deviceType: 'all'
     },
-    optimizationGoal: enumOr(body.optimizationGoal, ['clicks', 'impressions', 'conversions'], 'impressions'),
-    timeZone: trimmed(body.timeZone) || 'Asia/Kolkata',
-    dayParting: body.dayParting && typeof body.dayParting === 'object' ? body.dayParting : {},
-    hourParting: body.hourParting && typeof body.hourParting === 'object' ? body.hourParting : {},
-    pacing: enumOr(body.pacing, ['smooth', 'asap'], 'smooth'),
-    frequencyCap: clampInt(body.frequencyCap, AD_CONFIG.MIN_FREQUENCY_CAP, AD_CONFIG.MAX_FREQUENCY_CAP, 3)
+    optimizationGoal: 'impressions',
+    timeZone: 'Asia/Kolkata',
+    dayParting: {},
+    hourParting: {},
+    pacing: 'smooth',
+    frequencyCap: 3
   };
-
-  if (campaignData.target.age.max < campaignData.target.age.min) {
-    throw new AdValidationError('maxAge must be greater than or equal to minAge', 'maxAge');
-  }
-  if (campaignData.target.platforms.length === 0) {
-    campaignData.target.platforms = ['android', 'ios', 'web'];
-  }
 
   const creativeData = {
     adType,

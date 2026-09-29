@@ -1,123 +1,119 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/radius.dart';
 import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/core/providers/telegram_providers.dart';
-import 'package:vayug/shared/widgets/interactive_scale_button.dart';
+import 'package:vayug/shared/utils/app_text.dart';
+import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 
-class TelegramConnectBanner extends ConsumerWidget {
+Future<void> connectCommentAlerts(BuildContext context, WidgetRef ref) async {
+  HapticFeedback.selectionClick();
+  final launched = await ref.read(creatorTelegramProvider.notifier).connect();
+  if (!launched && context.mounted) {
+    VayuSnackBar.showError(
+        context,
+        AppText.get('telegram_connect_error',
+            fallback: 'Could not open Telegram. Please try again.'));
+  }
+}
+
+class TelegramConnectBanner extends ConsumerStatefulWidget {
   const TelegramConnectBanner({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tgState = ref.watch(creatorTelegramProvider);
+  ConsumerState<TelegramConnectBanner> createState() =>
+      _TelegramConnectBannerState();
+}
 
-    // If already connected or dismissed, do not render
-    if (tgState.isConnected || tgState.isDismissed) {
-      return const SizedBox.shrink();
-    }
+class _TelegramConnectBannerState extends ConsumerState<TelegramConnectBanner> {
+  @override
+  void initState() {
+    super.initState();
+    // Revalidate when a creator opens another sheet, as well as on app resume.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(creatorTelegramProvider.notifier).checkStatus();
+    });
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(creatorTelegramProvider);
+    if (!state.showBanner) return const SizedBox.shrink();
     return Container(
-      margin: EdgeInsets.symmetric(
-        horizontal: AppSpacing.spacing4,
-        vertical: AppSpacing.spacing2,
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.spacing3,
-        vertical: AppSpacing.spacing2,
-      ),
-      decoration: BoxDecoration(
+      margin: EdgeInsets.fromLTRB(AppSpacing.spacing5, AppSpacing.spacing2,
+          AppSpacing.spacing5, AppSpacing.spacing3),
+      padding: EdgeInsets.all(AppSpacing.spacing3),
+      decoration: ShapeDecoration(
         color: AppColors.surfacePrimary,
-        borderRadius: BorderRadius.circular(AppRadius.input),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.borderRadiusCard),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFF229ED9).withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.send_rounded,
-              color: Color(0xFF229ED9),
-              size: 16,
-            ),
-          ),
-          SizedBox(width: AppSpacing.spacing3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Telegram Alerts',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: AppRadius.borderRadiusSquircle,
                 ),
-                Text(
-                  'Get instant comment notifications',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: const Icon(Icons.send_rounded,
+                    color: AppColors.primaryLight, size: 18),
+              ),
+              SizedBox(width: AppSpacing.spacing3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        AppText.get('telegram_alerts',
+                            fallback: 'Telegram alerts'),
+                        style: AppTypography.labelLarge),
+                    SizedBox(height: AppSpacing.spacing1),
+                    Text(
+                        AppText.get('telegram_alerts_hint',
+                            fallback: 'Get notified when someone comments.'),
+                        style: AppTypography.bodySmall),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              IconButton(
+                tooltip: AppText.get('telegram_dismiss',
+                    fallback: 'Dismiss Telegram suggestion'),
+                constraints:
+                    const BoxConstraints.tightFor(width: 44, height: 44),
+                padding: EdgeInsets.zero,
+                onPressed: () =>
+                    ref.read(creatorTelegramProvider.notifier).dismissBanner(),
+                icon: const Icon(Icons.close_rounded,
+                    size: 18, color: AppColors.textSecondary),
+              ),
+            ],
           ),
-          SizedBox(width: AppSpacing.spacing2),
-          InteractiveScaleButton(
-            onTap: tgState.isConnecting
-                ? null
-                : () async {
-                    await ref.read(creatorTelegramProvider.notifier).connect();
-                  },
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.spacing3,
-                vertical: AppSpacing.spacing1,
+          SizedBox(height: AppSpacing.spacing2),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: state.isConnecting
+                  ? null
+                  : () => connectCommentAlerts(context, ref),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primaryLight,
+                minimumSize: const Size(44, 44),
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.spacing3),
+                textStyle: AppTypography.labelLarge,
               ),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(AppRadius.button),
-              ),
-              child: tgState.isConnecting
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      'Connect',
-                      style: AppTypography.labelSmall.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-          SizedBox(width: AppSpacing.spacing1),
-          InteractiveScaleButton(
-            onTap: () {
-              ref.read(creatorTelegramProvider.notifier).dismissBanner();
-            },
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.spacing1),
-              child: const Icon(
-                Icons.close_rounded,
-                size: 16,
-                color: AppColors.textTertiary,
-              ),
+              child: state.isConnecting
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(AppText.get('telegram_connect', fallback: 'Connect')),
             ),
           ),
         ],

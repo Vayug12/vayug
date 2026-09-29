@@ -1,15 +1,19 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:vayug/core/design/colors.dart';
+import 'package:vayug/core/design/radius.dart';
 import 'package:vayug/core/design/spacing.dart';
 import 'package:vayug/core/design/typography.dart';
-import 'package:vayug/shared/widgets/interactive_scale_button.dart';
+import 'package:vayug/shared/utils/app_text.dart';
+import 'package:vayug/shared/widgets/comments/comment_avatar.dart';
+import 'package:vayug/shared/widgets/comments/comment_emoji_bar.dart';
+import 'package:vayug/shared/widgets/vayu_snackbar.dart';
 
 class CommentInputField extends StatefulWidget {
   final String? userProfilePic;
   final bool isSubmitting;
   final bool isSignedIn;
-  final ValueChanged<String> onSubmit;
+  final Future<bool> Function(String) onSubmit;
   final VoidCallback onSignInRequired;
 
   const CommentInputField({
@@ -26,169 +30,180 @@ class CommentInputField extends StatefulWidget {
 }
 
 class _CommentInputFieldState extends State<CommentInputField> {
-  final TextEditingController _controller = TextEditingController();
-  bool _canSubmit = false;
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _sending = false;
+
+  bool get _isBusy => _sending || widget.isSubmitting;
+  bool get _canSubmit => _controller.text.trim().isNotEmpty && !_isBusy;
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_onTextChanged);
+    _controller.addListener(_rebuild);
+    _focusNode.addListener(_rebuild);
   }
 
-  void _onTextChanged() {
-    final canSubmit = _controller.text.trim().isNotEmpty && !widget.isSubmitting;
-    if (canSubmit != _canSubmit) {
-      setState(() => _canSubmit = canSubmit);
-    }
-  }
+  void _rebuild() => setState(() {});
 
-  void _handleSubmit() {
+  void _insertEmoji(String emoji) {
+    if (_isBusy) return;
     if (!widget.isSignedIn) {
       widget.onSignInRequired();
       return;
     }
+    final text = _controller.text;
+    final selection = _controller.selection;
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    final next = text.replaceRange(start, end, emoji);
+    if (next.characters.length > 500) return;
+    HapticFeedback.selectionClick();
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + emoji.length),
+    );
+  }
 
-    final text = _controller.text.trim();
-    if (text.isEmpty || widget.isSubmitting) return;
-
-    widget.onSubmit(text);
-    _controller.clear();
-    FocusScope.of(context).unfocus();
+  Future<void> _handleSubmit() async {
+    if (!widget.isSignedIn) {
+      widget.onSignInRequired();
+      return;
+    }
+    if (!_canSubmit) return;
+    HapticFeedback.lightImpact();
+    setState(() => _sending = true);
+    var success = false;
+    try {
+      success = await widget.onSubmit(_controller.text.trim());
+    } catch (_) {
+      success = false;
+    }
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (success) {
+      _controller.clear();
+      _focusNode.unfocus();
+    } else {
+      VayuSnackBar.showError(
+          context,
+          AppText.get('comment_send_error',
+              fallback: 'Could not post your comment. Please try again.'));
+    }
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onTextChanged);
+    _controller.removeListener(_rebuild);
+    _focusNode.removeListener(_rebuild);
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.spacing4,
-        AppSpacing.spacing2,
-        AppSpacing.spacing4,
-        AppSpacing.spacing2,
-      ),
+    return DecoratedBox(
       decoration: const BoxDecoration(
-        color: AppColors.backgroundSecondary,
+        color: AppColors.backgroundPrimary,
+        border: Border(top: BorderSide(color: AppColors.separator, width: 0.5)),
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // User Avatar
-            _buildAvatar(),
-            SizedBox(width: AppSpacing.spacing3),
-
-            // Input Field (pill shape, no borders)
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 100),
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundPrimary,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: TextField(
-                  controller: _controller,
-                  enabled: !widget.isSubmitting,
-                  keyboardType: TextInputType.multiline,
-                  maxLines: null,
-                  maxLength: 500,
-                  buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              child: _focusNode.hasFocus
+                  ? CommentEmojiBar(onSelected: _insertEmoji, enabled: !_isBusy)
+                  : const SizedBox(width: double.infinity),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.spacing5,
+                  vertical: AppSpacing.spacing3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    height: AppSpacing.minTouchTargetApple,
+                    child: Center(
+                        child: CommentAvatar(imageUrl: widget.userProfilePic)),
                   ),
-                  decoration: InputDecoration(
-                    hintText: widget.isSignedIn ? 'Add a comment...' : 'Sign in to comment...',
-                    hintStyle: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textTertiary,
+                  SizedBox(width: AppSpacing.spacing3),
+                  Expanded(
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfacePrimary,
+                        borderRadius: AppRadius.borderRadiusCardLarge,
+                      ),
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        readOnly: !widget.isSignedIn || _isBusy,
+                        keyboardType: TextInputType.multiline,
+                        minLines: 1,
+                        maxLines: 3,
+                        maxLength: 500,
+                        buildCounter: (context,
+                                {required currentLength,
+                                required isFocused,
+                                maxLength}) =>
+                            null,
+                        style: AppTypography.bodyMedium,
+                        cursorColor: AppColors.primaryLight,
+                        decoration: InputDecoration(
+                          hintText: widget.isSignedIn
+                              ? AppText.get('comment_hint',
+                                  fallback: 'Add a comment…')
+                              : AppText.get('comment_sign_in',
+                                  fallback: 'Sign in to comment'),
+                          hintStyle: AppTypography.bodyMedium
+                              .copyWith(color: AppColors.textSecondary),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.spacing4,
+                              vertical: AppSpacing.spacing3),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          isDense: true,
+                        ),
+                        onTap: () {
+                          if (!widget.isSignedIn) {
+                            _focusNode.unfocus();
+                            widget.onSignInRequired();
+                          }
+                        },
+                      ),
                     ),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.spacing4,
-                      vertical: AppSpacing.spacing2,
-                    ),
-                    border: InputBorder.none,
-                    isDense: true,
                   ),
-                  onTap: () {
-                    if (!widget.isSignedIn) {
-                      FocusScope.of(context).unfocus();
-                      widget.onSignInRequired();
-                    }
-                  },
-                ),
+                  SizedBox(width: AppSpacing.spacing2),
+                  IconButton(
+                    tooltip:
+                        AppText.get('comment_send', fallback: 'Post comment'),
+                    onPressed: _canSubmit ? _handleSubmit : null,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(44, 44),
+                      backgroundColor: AppColors.primary,
+                      disabledBackgroundColor: AppColors.surfacePrimary,
+                      foregroundColor: AppColors.white,
+                      disabledForegroundColor: AppColors.textTertiary,
+                    ),
+                    icon: _isBusy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.primaryLight))
+                        : const Icon(Icons.arrow_upward_rounded, size: 22),
+                  ),
+                ],
               ),
             ),
-            SizedBox(width: AppSpacing.spacing2),
-
-            // Send Button
-            widget.isSubmitting
-                ? SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: Padding(
-                      padding: EdgeInsets.all(AppSpacing.spacing2),
-                      child: const CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  )
-                : InteractiveScaleButton(
-                    onTap: _canSubmit ? _handleSubmit : null,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: _canSubmit ? AppColors.primary : Colors.transparent,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.arrow_upward_rounded,
-                        size: 20,
-                        color: _canSubmit ? AppColors.white : AppColors.textTertiary,
-                      ),
-                    ),
-                  ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildAvatar() {
-    const size = 32.0;
-    if (widget.userProfilePic != null && widget.userProfilePic!.isNotEmpty) {
-      return ClipOval(
-        child: CachedNetworkImage(
-          imageUrl: widget.userProfilePic!,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorWidget: (_, __, ___) => _buildFallbackAvatar(size),
-        ),
-      );
-    }
-    return _buildFallbackAvatar(size);
-  }
-
-  Widget _buildFallbackAvatar(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(
-        color: AppColors.surfacePrimary,
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.person_rounded,
-        size: 18,
-        color: AppColors.textSecondary,
       ),
     );
   }

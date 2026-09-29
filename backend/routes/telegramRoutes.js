@@ -12,7 +12,7 @@ router.post('/webhook', async (req, res) => {
   try {
     const secretHeader = req.headers['x-telegram-bot-api-secret-token'];
     const result = await telegramService.handleWebhookUpdate(req.body, secretHeader);
-    return res.status(200).json(result);
+    return res.status(result.ok ? 200 : 401).json(result);
   } catch (err) {
     console.error('❌ Webhook error:', err.message);
     return res.status(200).json({ ok: true }); // Always return 200 to Telegram so it doesn't retry spam

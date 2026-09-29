@@ -138,6 +138,7 @@ class VideoService implements IVideoService {
     bool clearSession = false,
     String? cursor,
     bool random = false,
+    List<String>? excludeIds,
   }) async {
     try {
       String url = '${NetworkHelper.apiBaseUrl}/videos?page=$page&limit=$limit';
@@ -162,6 +163,13 @@ class VideoService implements IVideoService {
 
       if (cursor != null && cursor.isNotEmpty) {
         url += '&cursor=${Uri.encodeComponent(cursor)}';
+      }
+
+      if (excludeIds != null && excludeIds.isNotEmpty) {
+        final cleanExcludes = excludeIds.where((id) => id.isNotEmpty).take(30).join(',');
+        if (cleanExcludes.isNotEmpty) {
+          url += '&excludeIds=${Uri.encodeComponent(cleanExcludes)}';
+        }
       }
 
       Map<String, String> headers = {

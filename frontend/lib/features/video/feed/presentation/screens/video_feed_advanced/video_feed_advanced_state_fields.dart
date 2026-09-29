@@ -272,6 +272,10 @@ mixin VideoFeedStateFieldsMixin on ConsumerState<VideoFeedAdvanced> {
   final Map<String, ValueNotifier<int>> _likeCountVN = {};
   final Set<String> _localLikedVideoIds = {};
 
+  // **NEW: Granular Save State Notifiers (Keyed by Video ID)**
+  final Map<String, ValueNotifier<bool>> _isSavedVN = {};
+  final Map<String, int> _saveRequestTokens = {};
+
   // Earnings cache
 
   // Persisted state keys

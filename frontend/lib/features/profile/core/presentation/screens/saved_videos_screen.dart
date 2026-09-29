@@ -296,12 +296,12 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 
       // Recent Saved Videos preview header and list (when "All" is active)
       if (_selectedFilterIndex == 0 && _savedVideos.isNotEmpty) ...[
-        SliverToBoxAdapter(
+        const SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+            padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
             child: Text(
               'Recently Saved',
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -370,16 +370,6 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                   ),
                 ],
               ),
-            ),
-
-            // Trailing 3-dots Menu
-            IconButton(
-              icon: const Icon(
-                Icons.more_vert,
-                color: AppColors.textSecondary,
-                size: 20,
-              ),
-              onPressed: onTap,
             ),
           ],
         ),
@@ -506,29 +496,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 height: 72,
                 color: const Color(0xFF261D19),
                 child: _vayuVideos.isNotEmpty
-                    ? Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          _buildMiniThumb(_vayuVideos.first.thumbnailUrl),
-                          // Subtle dark right panel with play icon like YouTube
-                          Positioned(
-                            top: 0,
-                            bottom: 0,
-                            right: 0,
-                            width: 48,
-                            child: Container(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
+                    ? _buildMiniThumb(_vayuVideos.first.thumbnailUrl)
                     : const Center(
                         child: Icon(
                           Icons.video_library_outlined,

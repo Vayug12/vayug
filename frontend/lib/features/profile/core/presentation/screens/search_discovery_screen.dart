@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/typography.dart';
 import 'package:vayug/core/design/radius.dart';
@@ -16,6 +17,8 @@ import 'package:vayug/shared/utils/app_logger.dart';
 import 'package:vayug/shared/utils/format_utils.dart';
 import 'package:vayug/shared/widgets/follow_button_widget.dart';
 import 'package:vayug/shared/widgets/vayu_video_card.dart';
+
+enum SearchTab { all, creators, videos, shorts }
 
 class SearchDiscoveryScreen extends StatefulWidget {
   /// **INJECTION POINT — The "FFmpeg Codec Socket".**
@@ -39,7 +42,6 @@ class SearchDiscoveryScreen extends StatefulWidget {
 class _DefaultSearchService implements ISearchService {
   const _DefaultSearchService();
 
-  // Lazy singleton — one instance shared across all default usages.
   static final _impl = SearchServiceImpl();
 
   @override
@@ -53,6 +55,10 @@ class _DefaultSearchService implements ISearchService {
   @override
   Future<SearchSuggestions> getSuggestions(String query) =>
       _impl.getSuggestions(query);
+
+  @override
+  Future<UnifiedSearchResult> searchUnified(String query, {int limit = 20}) =>
+      _impl.searchUnified(query, limit: limit);
 }
 
 // -----------------------------------------------------------------------------
@@ -61,15 +67,19 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
-  // Consumed via interface — no concrete class reference here.
   late final ISearchService _searchService = widget.searchService;
 
   String _query = '';
   bool _isSearching = false;
-
   bool _showResults = false;
+  SearchTab _selectedTab = SearchTab.all;
+
   List<UserModel> _resultCreators = [];
-  List<VideoModel> _resultVideos = [];
+  List<VideoModel> _creatorVideos = [];
+  List<VideoModel> _otherVideos = [];
+  List<String> _recentSearches = [];
+
+  static const String _recentSearchesKey = 'vayu_recent_searches_v2';
 
   final List<Map<String, dynamic>> _categories = [
     {'title': 'Motivation', 'icon': Icons.bolt_rounded},
@@ -81,25 +91,90 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadRecentSearches();
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
-  /// Only updates the local text state — NO network requests on typing!
+  Future<void> _loadRecentSearches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(_recentSearchesKey) ?? [];
+      if (mounted) {
+        setState(() => _recentSearches = list);
+      }
+    } catch (e) {
+      AppLogger.log('⚠️ SearchDiscovery: Error loading recent searches: $e');
+    }
+  }
+
+  Future<void> _saveRecentSearch(String q) async {
+    final query = q.trim();
+    if (query.isEmpty) return;
+
+    try {
+      final updated = [
+        query,
+        ..._recentSearches.where((s) => s.toLowerCase() != query.toLowerCase()),
+      ].take(10).toList();
+
+      if (mounted) {
+        setState(() => _recentSearches = updated);
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_recentSearchesKey, updated);
+    } catch (e) {
+      AppLogger.log('⚠️ SearchDiscovery: Error saving recent search: $e');
+    }
+  }
+
+  Future<void> _removeRecentSearch(String item) async {
+    try {
+      final updated = _recentSearches.where((s) => s != item).toList();
+      if (mounted) {
+        setState(() => _recentSearches = updated);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_recentSearchesKey, updated);
+    } catch (e) {
+      AppLogger.log('⚠️ SearchDiscovery: Error removing recent search: $e');
+    }
+  }
+
+  Future<void> _clearAllRecentSearches() async {
+    try {
+      if (mounted) {
+        setState(() => _recentSearches = []);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_recentSearchesKey);
+    } catch (e) {
+      AppLogger.log('⚠️ SearchDiscovery: Error clearing recent searches: $e');
+    }
+  }
+
+  /// Updates local text state only — no live auto-suggestions on typing.
   void _onSearchChanged(String value) {
     setState(() {
       _query = value;
       if (value.trim().isEmpty) {
         _showResults = false;
         _resultCreators = [];
-        _resultVideos = [];
+        _creatorVideos = [];
+        _otherVideos = [];
       }
     });
   }
 
-  /// Triggers network search queries only when the user explicitly hits search.
+  /// Triggers unified search query only upon explicit user submission.
   Future<void> _performSearch([String? targetQuery]) async {
     final q = (targetQuery ?? _searchController.text).trim();
     if (q.isEmpty) return;
@@ -112,21 +187,24 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
       }
       _isSearching = true;
       _showResults = true;
+      _selectedTab = SearchTab.all;
     });
 
+    _saveRecentSearch(q);
+
     try {
-      final creators = await _searchService.searchCreators(q);
-      final videos = await _searchService.searchVideos(q);
+      final result = await _searchService.searchUnified(q);
 
       if (mounted) {
         setState(() {
-          _resultCreators = creators;
-          _resultVideos = videos;
+          _resultCreators = result.creators;
+          _creatorVideos = result.creatorVideos;
+          _otherVideos = result.videos;
           _isSearching = false;
         });
       }
     } catch (e) {
-      AppLogger.log('❌ SearchDiscovery: Error performing search: $e');
+      AppLogger.log('❌ SearchDiscovery: Error performing unified search: $e');
       if (mounted) setState(() => _isSearching = false);
     }
   }
@@ -162,10 +240,9 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
   Widget _buildSearchBar() {
     return Container(
       height: 44,
-      margin: EdgeInsets.zero,
       decoration: BoxDecoration(
         color: AppColors.backgroundSecondary,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderRadius: BorderRadius.circular(AppRadius.input),
       ),
       child: TextField(
         controller: _searchController,
@@ -174,16 +251,17 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
         textInputAction: TextInputAction.search,
         onChanged: _onSearchChanged,
         onSubmitted: (_) => _performSearch(),
-        style: AppTypography.bodyLarge,
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
         decoration: InputDecoration(
-          hintText: 'Search for content, creators...',
+          hintText: 'Search creators, videos...',
           hintStyle:
               AppTypography.bodyMedium.copyWith(color: AppColors.textTertiary),
           border: InputBorder.none,
           prefixIcon: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => _performSearch(),
-            child: const Icon(Icons.search, color: AppColors.textTertiary, size: 20),
+            child: const Icon(Icons.search_rounded,
+                color: AppColors.textTertiary, size: 20),
           ),
           suffixIcon: _query.isNotEmpty
               ? GestureDetector(
@@ -195,7 +273,7 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
                       color: AppColors.textTertiary, size: 20),
                 )
               : null,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
     );
@@ -203,33 +281,113 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
 
   Widget _buildBody() {
     if (!_showResults) {
-      if (_query.trim().isNotEmpty) {
-        // Shown while typing without triggering network search
-        return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          children: [
-            ListTile(
-              leading: const Icon(Icons.search, color: AppColors.textTertiary),
-              title: Text(
-                _query.trim(),
-                style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
-              ),
-              trailing: const Icon(Icons.north_west, color: AppColors.textTertiary, size: 18),
-              onTap: () => _performSearch(),
-            ),
-          ],
-        );
-      }
       return _buildDiscoveryView();
     }
     return _buildResultsView();
   }
 
+  // ---------------------------------------------------------------------------
+  // Pre-Search State (Recent Searches + Explore Topics)
+  // ---------------------------------------------------------------------------
+
   Widget _buildDiscoveryView() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
-        const SizedBox(height: 8),
+        // 1. Recent Searches (Whitespace separation, no dividers)
+        if (_recentSearches.isNotEmpty) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'RECENT SEARCHES',
+                style: AppTypography.labelSmall.copyWith(
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+              GestureDetector(
+                onTap: _clearAllRecentSearches,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    'Clear',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _recentSearches.map((item) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundSecondary,
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.button),
+                    onTap: () {
+                      _searchController.text = item;
+                      _performSearch(item);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.history_rounded,
+                              size: 14, color: AppColors.textTertiary),
+                          const SizedBox(width: 8),
+                          Text(
+                            item,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _removeRecentSearch(item),
+                            child: const Padding(
+                              padding: EdgeInsets.all(2.0),
+                              child: Icon(Icons.close_rounded,
+                                  size: 14, color: AppColors.textTertiary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 32),
+        ],
+
+        // 2. Curated Categories (Apple-style squircles)
+        Text(
+          'EXPLORE TOPICS',
+          style: AppTypography.labelSmall.copyWith(
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textTertiary,
+          ),
+        ),
+        const SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -247,7 +405,6 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
               icon: cat['icon'],
               onTap: () {
                 _searchController.text = cat['title'];
-                _onSearchChanged(cat['title']);
                 _performSearch(cat['title']);
               },
             );
@@ -258,254 +415,368 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Results State (Filter Tabs + Intent-Aware Shelves)
+  // ---------------------------------------------------------------------------
+
   Widget _buildResultsView() {
     if (_isSearching) {
       return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
     }
 
-    if (_resultCreators.isEmpty && _resultVideos.isEmpty) {
+    final hasAnyResult = _resultCreators.isNotEmpty ||
+        _creatorVideos.isNotEmpty ||
+        _otherVideos.isNotEmpty;
+
+    if (!hasAnyResult) {
       return _buildNoResults();
     }
 
-    final vayu = _resultVideos.where((v) => v.videoType == 'vayu').toList();
-    final yog = _resultVideos.where((v) => v.videoType != 'vayu').toList();
-
-    return ListView(
-      padding: const EdgeInsets.only(top: 8, bottom: 48),
+    return Column(
       children: [
-        // 1. YouTube-style Account / Channel Card
-        if (_resultCreators.isNotEmpty) ...[
-          ..._resultCreators.take(3).map((u) => _buildYouTubeChannelCard(u)),
-          if (_resultCreators.length > 3)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextButton(
-                onPressed: () {
-                  // Future: Show all creators screen
-                },
-                child: const Text('Show more creators'),
+        // Filter Tabs Bar (No dividers — clean whitespace)
+        _buildFilterTabs(),
+        const SizedBox(height: 12),
+        Expanded(
+          child: _buildSelectedTabContent(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterTabs() {
+    final tabs = [
+      {'tab': SearchTab.all, 'label': 'All'},
+      {'tab': SearchTab.creators, 'label': 'Creators'},
+      {'tab': SearchTab.videos, 'label': 'Videos'},
+      {'tab': SearchTab.shorts, 'label': 'Shorts'},
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: tabs.map((t) {
+          final tab = t['tab'] as SearchTab;
+          final label = t['label'] as String;
+          final isSelected = _selectedTab == tab;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _selectedTab = tab);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.backgroundSecondary,
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                ),
+                child: Text(
+                  label,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: isSelected
+                        ? Colors.white
+                        : AppColors.textSecondary,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
               ),
             ),
-          const Divider(
-            color: Color(0x1FFFFFFF),
-            height: 24,
-            thickness: 0.8,
-            indent: 16,
-            endIndent: 16,
-          ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSelectedTabContent() {
+    switch (_selectedTab) {
+      case SearchTab.all:
+        return _buildAllTab();
+      case SearchTab.creators:
+        return _buildCreatorsTab();
+      case SearchTab.videos:
+        return _buildVideosTab();
+      case SearchTab.shorts:
+        return _buildShortsTab();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab 1: All
+  // ---------------------------------------------------------------------------
+
+  Widget _buildAllTab() {
+    final allCombinedVideos = [..._creatorVideos, ..._otherVideos];
+
+    return ListView(
+      padding: const EdgeInsets.only(top: 4, bottom: 48),
+      children: [
+        // 1. Creator Profile Card (Top priority when creator matches)
+        if (_resultCreators.isNotEmpty) ...[
+          _buildCreatorCard(_resultCreators.first),
+          const SizedBox(height: 24),
         ],
 
-        // 2. YouTube-style Long Form Videos (stacked vertically like YouTube)
-        if (vayu.isNotEmpty) ...[
-          _buildYouTubeLongVideosSection(vayu, _resultVideos),
-          if (yog.isNotEmpty)
-            const Divider(
-              color: Color(0x1FFFFFFF),
-              height: 32,
-              thickness: 0.8,
-              indent: 16,
-              endIndent: 16,
+        // 2. Creator's Own Videos ("Uploads by [Creator]")
+        if (_creatorVideos.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Uploads by ${_resultCreators.isNotEmpty ? _resultCreators.first.name : 'Creator'}',
+              style: AppTypography.titleSmall.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
             ),
+          ),
+          const SizedBox(height: 12),
+          _buildVideoList(_creatorVideos, allCombinedVideos),
+          const SizedBox(height: 28),
         ],
 
-        // 3. YouTube-style Shorts Grid (with title, views, and 2-column layout)
-        if (yog.isNotEmpty) ...[
-          _buildYouTubeShortsSection(yog, _resultVideos),
+        // 3. Other Relevant Matching Videos (From general topics / other creators)
+        if (_otherVideos.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              _resultCreators.isNotEmpty ? 'Related Videos' : 'Videos',
+              style: AppTypography.titleSmall.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildVideoList(_otherVideos, allCombinedVideos),
         ],
       ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // YouTube-Style Account & Video Cards
+  // Tab 2: Creators
   // ---------------------------------------------------------------------------
 
-  Widget _buildYouTubeChannelCard(UserModel user) {
+  Widget _buildCreatorsTab() {
+    if (_resultCreators.isEmpty) {
+      return _buildNoResults(customMessage: 'No creators found for "$_query"');
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      itemCount: _resultCreators.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        return _buildCreatorCard(_resultCreators[index]);
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab 3: Videos (Long Form)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildVideosTab() {
+    final allVideos = [..._creatorVideos, ..._otherVideos];
+    final vayuVideos = allVideos.where((v) => v.videoType == 'vayu').toList();
+
+    if (vayuVideos.isEmpty) {
+      return _buildNoResults(customMessage: 'No long videos found for "$_query"');
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: vayuVideos.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        final video = vayuVideos[index];
+        return VayuVideoCard(
+          video: video,
+          onTap: () => _navigateToVideo(video, allVideos),
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab 4: Shorts (Short Form)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildShortsTab() {
+    final allVideos = [..._creatorVideos, ..._otherVideos];
+    final shorts = allVideos.where((v) => v.videoType != 'vayu').toList();
+
+    if (shorts.isEmpty) {
+      return _buildNoResults(customMessage: 'No videos found for "$_query"');
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.58,
+      ),
+      itemCount: shorts.length,
+      itemBuilder: (context, index) {
+        final video = shorts[index];
+        return _buildYouTubeShortCard(video, allVideos);
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helper Widgets: Video Lists & Cards (Strict Apple Squircle Design)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildVideoList(List<VideoModel> videos, List<VideoModel> allVideos) {
+    final vayu = videos.where((v) => v.videoType == 'vayu').toList();
+    final yog = videos.where((v) => v.videoType != 'vayu').toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (vayu.isNotEmpty) ...[
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: vayu.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 16),
+            itemBuilder: (context, index) {
+              final video = vayu[index];
+              return VayuVideoCard(
+                video: video,
+                onTap: () => _navigateToVideo(video, allVideos),
+              );
+            },
+          ),
+          if (yog.isNotEmpty) const SizedBox(height: 20),
+        ],
+        if (yog.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.58,
+              ),
+              itemCount: yog.length,
+              itemBuilder: (context, index) {
+                final video = yog[index];
+                return _buildYouTubeShortCard(video, allVideos);
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCreatorCard(UserModel user) {
     final hasProfession =
         user.professionLabel != null && user.professionLabel!.trim().isNotEmpty;
     final handle = hasProfession
         ? user.professionLabel!.trim()
         : '@${user.name.toLowerCase().replaceAll(RegExp(r'\s+'), '')}';
 
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ProfileScreen(userId: user.id)),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Circular Channel Avatar (YouTube radius 36)
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: AppColors.backgroundSecondary,
-              backgroundImage: user.profilePic.isNotEmpty
-                  ? CachedNetworkImageProvider(user.profilePic)
-                  : null,
-              child: user.profilePic.isEmpty
-                  ? const Icon(Icons.person, size: 36, color: AppColors.textTertiary)
-                  : null,
-            ),
-            const SizedBox(width: 16),
-            // Channel Details & Subscribe Button
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    user.name,
-                    style: AppTypography.titleMedium.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    handle,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${FormatUtils.formatViews(user.followersCount)} subscribers • ${user.videos.length} videos',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (user.bio != null && user.bio!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      user.bio!.trim(),
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textTertiary,
-                        fontSize: 11,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  FollowButtonWidget(
-                    uploaderId: user.id,
-                    uploaderName: user.name,
-                    height: 32,
-                    activeBackgroundColor: Colors.white,
-                    activeTextColor: Colors.black,
-                    inactiveBackgroundColor: const Color(0xFF272727),
-                    inactiveTextColor: Colors.white,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
-    );
-  }
-
-  Widget _buildYouTubeLongVideosSection(
-      List<VideoModel> vayuVideos, List<VideoModel> allVideos) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Text(
-            'Videos',
-            style: AppTypography.titleMedium.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          itemCount: vayuVideos.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 16),
-          itemBuilder: (context, index) {
-            final video = vayuVideos[index];
-            return VayuVideoCard(
-              video: video,
-              onTap: () => _navigateToVideo(video, allVideos),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ProfileScreen(userId: user.id)),
             );
           },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildYouTubeShortsSection(
-      List<VideoModel> shorts, List<VideoModel> allVideos) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: AppColors.surfacePrimary,
+                  backgroundImage: user.profilePic.isNotEmpty
+                      ? CachedNetworkImageProvider(user.profilePic)
+                      : null,
+                  child: user.profilePic.isEmpty
+                      ? const Icon(Icons.person_rounded,
+                          size: 32, color: AppColors.textTertiary)
+                      : null,
                 ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  color: Colors.red,
-                  size: 20,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        user.name,
+                        style: AppTypography.titleSmall.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        handle,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${FormatUtils.formatViews(user.followersCount)} followers • ${user.videos.length} videos',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 10),
+                      FollowButtonWidget(
+                        uploaderId: user.id,
+                        uploaderName: user.name,
+                        height: 32,
+                        activeBackgroundColor: Colors.white,
+                        activeTextColor: Colors.black,
+                        inactiveBackgroundColor: AppColors.primary,
+                        inactiveTextColor: Colors.white,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Shorts',
-                style: AppTypography.titleMedium.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: shorts.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.58, // 9:15.5 aspect ratio for vertical card
+              ],
             ),
-            itemBuilder: (context, index) {
-              final video = shorts[index];
-              return _buildYouTubeShortCard(video, allVideos);
-            },
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -513,13 +784,12 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
     return GestureDetector(
       onTap: () => _navigateToVideo(video, allVideos),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.image),
         child: Container(
           color: AppColors.backgroundSecondary,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Thumbnail
               if (video.thumbnailUrl.isNotEmpty)
                 CachedNetworkImage(
                   imageUrl: video.thumbnailUrl,
@@ -540,7 +810,7 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                height: 120,
+                height: 100,
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -555,7 +825,7 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
                 ),
               ),
 
-              // Exclusive subscriber badge if applicable
+              // Subscriber-only badge
               if (video.isSubscriberOnly)
                 Positioned(
                   top: 8,
@@ -567,7 +837,7 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
                       gradient: const LinearGradient(
                         colors: [Color(0xFFFFD54F), Color(0xFFFF8F00)],
                       ),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.button),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -587,7 +857,7 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
                   ),
                 ),
 
-              // Title and views count
+              // Title and views
               Positioned(
                 left: 8,
                 right: 8,
@@ -597,30 +867,20 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      video.videoName.isNotEmpty ? video.videoName : 'Short Video',
+                      video.videoName,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: AppTypography.bodySmall.copyWith(
                         color: Colors.white,
-                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         height: 1.25,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(0, 1),
-                            blurRadius: 3,
-                            color: Colors.black87,
-                          ),
-                        ],
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${FormatUtils.formatViews(video.views)} views',
-                      style: const TextStyle(
+                      style: AppTypography.labelSmall.copyWith(
                         color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -636,35 +896,45 @@ class _SearchDiscoveryScreenState extends State<SearchDiscoveryScreen> {
   void _navigateToVideo(VideoModel video, List<VideoModel> all) {
     if (video.videoType == 'vayu') {
       Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => VayuLongFormPlayerScreen(
-                  video: video, relatedVideos: all)));
+        context,
+        MaterialPageRoute(
+          builder: (_) => VayuLongFormPlayerScreen(
+            video: video,
+            relatedVideos: all,
+          ),
+        ),
+      );
     } else {
       Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) =>
-                  VideoScreen(initialVideos: all, initialVideoId: video.id)));
+        context,
+        MaterialPageRoute(
+          builder: (_) => VideoScreen(
+            initialVideos: all,
+            initialVideoId: video.id,
+          ),
+        ),
+      );
     }
   }
 
-  Widget _buildNoResults() {
+  Widget _buildNoResults({String? customMessage}) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off_rounded,
-                size: 64,
-                color: AppColors.textTertiary.withValues(alpha: 0.3)),
+            Icon(
+              Icons.search_off_rounded,
+              size: 48,
+              color: AppColors.textTertiary.withValues(alpha: 0.4),
+            ),
             const SizedBox(height: 16),
             Text(
-              'No results found for "$_query"',
+              customMessage ?? 'No results found for "$_query"',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyLarge
-                  .copyWith(color: AppColors.textTertiary),
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),

@@ -3,6 +3,8 @@ import Video from '../../models/Video.js';
 import User from '../../models/User.js';
 import Follower from '../../models/Follower.js';
 import RemovedVideoRecord from '../../models/RemovedVideoRecord.js';
+import SavedVideo from '../../models/SavedVideo.js';
+import FeedHistory from '../../models/FeedHistory.js';
 import RecommendationService from '../../services/yugFeedServices/recommendationService.js';
 import FeedQueueService from '../../services/yugFeedServices/feedQueueService.js';
 import redisService from '../../services/caching/redisService.js';
@@ -17,7 +19,7 @@ import {
 /**
  * Helper to populate episodes for a list of videos
  */
-const populateEpisodesForVideos = async (videos) => {
+export const populateEpisodesForVideos = async (videos) => {
   if (!videos || videos.length === 0) return;
   
   const seriesIds = new Set();
@@ -85,6 +87,44 @@ const populateUserLikesForVideos = async (videos, userObjectIdStr) => {
     }
   } catch (err) {
     console.error('⚠️ Error checking user likes for videos:', err);
+  }
+};
+
+/**
+ * Helper to accurately populate isSaved for a list of videos for a given viewer
+ */
+const populateUserSavesForVideos = async (videos, userObjectIdStr) => {
+  if (!userObjectIdStr || !videos || videos.length === 0) return;
+  const videoObjectIds = videos
+    .map(v => v._id || v.id)
+    .filter(Boolean)
+    .map(id => {
+      try {
+        return new mongoose.Types.ObjectId(id);
+      } catch (_) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (videoObjectIds.length === 0) return;
+
+  try {
+    const userObjId = new mongoose.Types.ObjectId(userObjectIdStr);
+    const savedDocs = await SavedVideo.find({
+      user: userObjId,
+      video: { $in: videoObjectIds },
+    }).select('video').lean();
+
+    const savedSet = new Set(savedDocs.map(d => d.video.toString()));
+    for (const video of videos) {
+      const vidId = (video._id || video.id)?.toString();
+      if (vidId) {
+        video.isSaved = savedSet.has(vidId);
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ Error checking user saves for videos:', err);
   }
 };
 
@@ -262,7 +302,10 @@ export const getUserVideos = async (req, res) => {
       if (rqUser) requestingUserObjectIdStr = rqUser._id.toString();
     }
 
-    await populateUserLikesForVideos(videosWithMetadata, requestingUserObjectIdStr);
+    await Promise.all([
+      populateUserLikesForVideos(videosWithMetadata, requestingUserObjectIdStr),
+      populateUserSavesForVideos(videosWithMetadata, requestingUserObjectIdStr),
+    ]);
 
     const videosSerialized = serializeVideos(videosWithMetadata, req.apiVersion, requestingUserObjectIdStr, req.traceId);
     
@@ -336,12 +379,21 @@ export const getFeed = async (req, res) => {
       : null;
     const viewerProfessionId = viewerProfile?.professionId || null;
 
-    const { videoType: queryVideoType, type: queryType, limit = 10, page = 1, clearSession, cursor } = req.query;
+    const { videoType: queryVideoType, type: queryType, limit = 10, page = 1, clearSession, cursor, excludeIds } = req.query;
     const videoType = queryVideoType || queryType;
     const limitNum = parseInt(limit) || 5;
     const pageNum = parseInt(page) || 1;
     const deviceId = req.headers['x-device-id'];
     const userIdentifier = userId || deviceId || 'anon';
+    
+    const clientExcludes = [];
+    if (excludeIds) {
+      if (Array.isArray(excludeIds)) {
+        clientExcludes.push(...excludeIds.map(id => String(id)));
+      } else if (typeof excludeIds === 'string') {
+        clientExcludes.push(...excludeIds.split(',').map(s => s.trim()).filter(Boolean));
+      }
+    }
     
     const requestedType = (videoType || 'yog').toLowerCase();
     const type = requestedType;
@@ -365,56 +417,74 @@ export const getFeed = async (req, res) => {
     );
     
     if (finalVideos.length === 0) {
-      console.log(`[FeedQueue] Queue empty for ${userIdentifier} (${type}), falling back to MongoDB with scoring`);
-      const query = withProfessionEligibility({
-        videoType: type,
-        processingStatus: 'completed',
-        isSubscriberOnly: { $ne: true },
-      }, viewerProfessionId);
-
-      // STRICT: Main feed NEVER shows subscriber-only videos
-
-      const poolLimit = cursor ? 30 : 60;
-      const queryCursor = cursor ? { createdAt: { $lt: new Date(cursor) } } : {};
+      console.log(`[FeedQueue] Queue empty for ${userIdentifier} (${type}), falling back to seen-filtered candidates`);
       
-      let skip = 0;
-      if (!cursor && pageNum > 1) {
-        skip = (pageNum - 1) * limitNum;
+      const fallbackIds = await FeedQueueService.getFallbackIds(
+        userIdentifier,
+        type,
+        limitNum,
+        clientExcludes,
+        viewerProfessionId
+      );
+
+      if (fallbackIds && fallbackIds.length > 0) {
+        finalVideos = await FeedQueueService.populateVideos(fallbackIds);
       }
 
-      // 1. Fetch a larger pool of candidate videos
-      const candidates = await Video.find({
-        ...query,
-        ...queryCursor
-      })
-        .populate('uploader', 'name profilePic googleId')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(poolLimit)
-        .lean();
+      if (finalVideos.length === 0) {
+        const query = withProfessionEligibility({
+          videoType: type,
+          processingStatus: 'completed',
+          isSubscriberOnly: { $ne: true },
+        }, viewerProfessionId);
 
-      if (candidates.length > 0) {
-        // 2. Load context (user profile + interest vector) for scoring
-        let userProfile = viewerProfile;
-        let userVector = null;
+        const poolLimit = cursor ? 30 : 60;
+        const queryCursor = cursor ? { createdAt: { $lt: new Date(cursor) } } : {};
         
-        if (userId && userId !== 'anon') {
-          userVector = await RecommendationService.getUserInterestVector(userId);
+        let skip = 0;
+        if (!cursor && pageNum > 1) {
+          skip = (pageNum - 1) * limitNum;
         }
 
-        const context = {
-          user: userProfile || 'anon',
-          userVector: userVector
-        };
+        const candidates = await Video.find({
+          ...query,
+          ...queryCursor
+        })
+          .populate('uploader', 'name profilePic googleId')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(poolLimit)
+          .lean();
 
-        // 3. Score and rank candidates using modular RecommendationEngine (utilizes Gemini analysis)
-        const rankedCandidates = await RecommendationService.orderFeedWithDiversity(candidates, context);
+        if (candidates.length > 0) {
+          const excludeSet = new Set(clientExcludes.map(id => String(id)));
+          let freshCandidates = candidates;
+          if (userIdentifier && userIdentifier !== 'anon') {
+            const seenFlags = await redisService.bfMExists(
+              `user:bf_seen:${userIdentifier}`,
+              candidates.map(v => v._id.toString())
+            );
+            freshCandidates = candidates.filter((v, i) => !seenFlags[i] && !excludeSet.has(v._id.toString()));
+          }
+          if (freshCandidates.length === 0) {
+            freshCandidates = candidates.filter(v => !excludeSet.has(v._id.toString()));
+            if (freshCandidates.length === 0) freshCandidates = candidates;
+          }
 
-        // 4. Perform weighted shuffle to ensure variety and prevent identical feed order
-        finalVideos = RecommendationService.weightedShuffle(rankedCandidates, limitNum);
-        console.log(`[FeedFallback] Scored & shuffled ${finalVideos.length} fallback videos from pool of ${candidates.length}`);
-      } else {
-        finalVideos = [];
+          let userProfile = viewerProfile;
+          let userVector = null;
+          if (userId && userId !== 'anon') {
+            userVector = await RecommendationService.getUserInterestVector(userId);
+          }
+
+          const context = {
+            user: userProfile || 'anon',
+            userVector: userVector
+          };
+
+          const rankedCandidates = await RecommendationService.orderFeedWithDiversity(freshCandidates, context);
+          finalVideos = RecommendationService.weightedShuffle(rankedCandidates, limitNum);
+        }
       }
     }
 
@@ -427,13 +497,23 @@ export const getFeed = async (req, res) => {
     finalVideos = RecommendationService.enforceMaxConsecutive(finalVideos, 2);
     await populateEpisodesForVideos(finalVideos);
 
+    // Record served videos as seen for this user/device so they won't repeat
+    if (finalVideos.length > 0 && userIdentifier && userIdentifier !== 'anon' && userIdentifier !== 'undefined') {
+      const servedIds = finalVideos.map(v => (v._id || v.id)?.toString()).filter(Boolean);
+      await redisService.bfMAdd(`user:bf_seen:${userIdentifier}`, servedIds);
+      FeedHistory.markAsSeen(userIdentifier, finalVideos).catch(() => {});
+    }
+
     let rqUserObjectIdStr = req.user?._id;
     if (!rqUserObjectIdStr && userId) {
       const rqUser = await User.findOne({ googleId: userId }).select('_id').lean();
       if (rqUser) rqUserObjectIdStr = rqUser._id.toString();
     }
 
-    await populateUserLikesForVideos(finalVideos, rqUserObjectIdStr);
+    await Promise.all([
+      populateUserLikesForVideos(finalVideos, rqUserObjectIdStr),
+      populateUserSavesForVideos(finalVideos, rqUserObjectIdStr),
+    ]);
 
     const serializedVideos = serializeVideos(finalVideos, req.apiVersion, rqUserObjectIdStr, req.traceId);
 
@@ -567,7 +647,10 @@ export const getFollowingFeed = async (req, res) => {
       if (nextCursor instanceof Date) nextCursor = nextCursor.toISOString();
     }
 
-    await populateUserLikesForVideos(pageVideos, userId ? userId.toString() : null);
+    await Promise.all([
+      populateUserLikesForVideos(pageVideos, userId ? userId.toString() : null),
+      populateUserSavesForVideos(pageVideos, userId ? userId.toString() : null),
+    ]);
 
     const payload = {
       videos: serializeVideos(pageVideos, req.apiVersion, userId.toString(), req.traceId),
@@ -621,7 +704,7 @@ export const getVideoById = async (req, res) => {
       }
     }
 
-    const [episodes, rank, isLiked] = await Promise.all([
+    const [episodes, rank, isLiked, isSavedDoc] = await Promise.all([
       videoObj.seriesId ?
         Video.find({ seriesId: videoObj.seriesId, processingStatus: 'completed' })
           .select('_id videoName thumbnailUrl episodeNumber seriesId duration')
@@ -632,10 +715,15 @@ export const getVideoById = async (req, res) => {
         : Promise.resolve(0),
       (rqUserObjectIdStr)
         ? Promise.resolve((videoObj.likedBy || []).some(id => id.toString() === rqUserObjectIdStr))
+        : Promise.resolve(false),
+      (rqUserObjectIdStr)
+        ? SavedVideo.exists({ user: rqUserObjectIdStr, video: videoObj._id })
         : Promise.resolve(false)
     ]);
 
     videoObj.isLiked = isLiked;
+    videoObj.isSaved = !!isSavedDoc;
+    videoObj.episodes = episodes;
     const transformedVideo = serializeVideo(videoObj, req.apiVersion, rqUserObjectIdStr, req.traceId);
     res.json(transformedVideo);
   } catch (error) {

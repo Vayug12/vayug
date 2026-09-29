@@ -55,6 +55,7 @@ import 'package:vayug/features/ads/presentation/widgets/carousel_ad_widget.dart'
 import 'package:vayug/features/profile/core/data/services/background_profile_preloader.dart';
 import 'package:vayug/features/profile/core/data/services/profile_preloader.dart';
 import 'package:vayug/features/profile/core/presentation/screens/profile_screen.dart';
+import 'package:vayug/features/profile/core/presentation/screens/saved_shorts_screen.dart';
 import 'package:vayug/features/onboarding/presentation/managers/app_initialization_manager.dart';
 
 // Shared widgets & utilities

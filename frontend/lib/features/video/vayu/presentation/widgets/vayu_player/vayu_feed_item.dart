@@ -478,11 +478,19 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                           offset: _offset,
                           child: Transform.scale(
                             scale: _scale,
-                            child: AspectRatio(
-                              aspectRatio: 16 / 9,
-                              child: VideoPlayer(
-                                controller!,
-                                key: ValueKey(controller),
+                            child: FittedBox(
+                              fit: BoxFit.contain,
+                              child: SizedBox(
+                                width: controller!.value.size.width > 0
+                                    ? controller.value.size.width
+                                    : 16.0,
+                                height: controller.value.size.height > 0
+                                    ? controller.value.size.height
+                                    : 9.0,
+                                child: VideoPlayer(
+                                  controller,
+                                  key: ValueKey(controller),
+                                ),
                               ),
                             ),
                           ),

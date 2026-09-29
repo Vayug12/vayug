@@ -108,6 +108,94 @@ extension _VideoFeedActions on _VideoFeedAdvancedState {
     }
   }
 
+  /// Handle save/bookmark button press with instant optimistic update and background sync
+  Future<void> _handleSave(VideoModel video) async {
+    final authController = ref.read(googleSignInProvider);
+    if (!authController.isSignedIn) {
+      final signedIn = await _triggerSignInOptions();
+      if (!signedIn) return;
+    }
+
+    final isSavedVN =
+        _getOrCreateNotifier<bool>(_isSavedVN, video.id, video.isSaved);
+
+    final wasSaved = isSavedVN.value;
+    final newSaved = !wasSaved;
+
+    // 1. Instant 0ms Optimistic UI update
+    isSavedVN.value = newSaved;
+    video.isSaved = newSaved;
+
+    // 2. Instant 0ms Compact Pill SnackBar
+    if (mounted) {
+      if (newSaved) {
+        VayuSnackBar.showCompact(
+          context,
+          'Saved to bookmarks',
+          type: VayuSnackBarType.success,
+          duration: const Duration(seconds: 2),
+          actionLabel: 'View',
+          onAction: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SavedShortsScreen(),
+              ),
+            );
+          },
+        );
+      } else {
+        VayuSnackBar.showCompact(
+          context,
+          'Removed from bookmarks',
+          type: VayuSnackBarType.info,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    }
+
+    // 3. Track request token to support rapid multi-taps without locking UI
+    final currentToken = (_saveRequestTokens[video.id] ?? 0) + 1;
+    _saveRequestTokens[video.id] = currentToken;
+
+    // 4. Background network sync
+    try {
+      final serverSaved = await _videoService.toggleSave(video.id);
+
+      // Only reconcile if no newer tap occurred while this request was in flight
+      if (_saveRequestTokens[video.id] == currentToken) {
+        video.isSaved = serverSaved;
+        isSavedVN.value = serverSaved;
+      }
+    } catch (e) {
+      AppLogger.log('❌ Error syncing save for video ${video.id}: $e');
+
+      // Only revert if no newer tap occurred
+      if (_saveRequestTokens[video.id] == currentToken) {
+        isSavedVN.value = wasSaved;
+        video.isSaved = wasSaved;
+
+        String errorMessage = 'Failed to save video';
+        final errorString = e.toString();
+        if (errorString.contains('sign in') ||
+            errorString.contains('authenticated')) {
+          errorMessage = 'Please sign in again to save videos';
+          Future.delayed(
+            const Duration(milliseconds: 500),
+            _triggerSignInOptions,
+          );
+        }
+        if (mounted) {
+          VayuSnackBar.showCompact(
+            context,
+            errorMessage,
+            type: VayuSnackBarType.error,
+          );
+        }
+      }
+    }
+  }
+
   /// Trigger Google Sign-In account picker popup
   Future<bool> _triggerSignInOptions() async {
     if (_isGoogleSignInInProgress) return false;

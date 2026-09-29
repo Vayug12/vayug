@@ -6,6 +6,7 @@ import monthlyNotificationCron from '../services/notificationServices/monthlyNot
 import recommendationScoreCron from '../services/yugFeedServices/recommendationScoreCron.js';
 import adCleanupService from '../services/adServices/adCleanupService.js';
 import { expireEndedCampaigns } from '../services/adServices/campaignSettlement.js';
+import telegramWebhookService from '../services/telegramWebhookService.js';
 
 const revenueCatReconcileScript = fileURLToPath(
   new URL('../scripts/reconcile-revenuecat.js', import.meta.url)
@@ -35,6 +36,8 @@ const reconcileRevenueCat = (trigger) => {
 
 export default async () => {
   try {
+    await telegramWebhookService.configure();
+
     // Start services that require database
     automatedPayoutService.startScheduler();
 

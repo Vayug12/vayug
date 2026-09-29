@@ -480,6 +480,16 @@ router.post('/video/direct-complete', verifyToken, uploadLimiter, async (req, re
       if (!newVideo.isSubscriberOnly) {
         cacheKeysToInvalidate.push('videos:feed:*');
       }
+      if (newVideo.seriesId) {
+        try {
+          const siblings = await Video.find({ seriesId: newVideo.seriesId }).select('_id').lean();
+          siblings.forEach(s => {
+            cacheKeysToInvalidate.push(`video:data:${s._id.toString()}`);
+            cacheKeysToInvalidate.push(`video:data:v2:${s._id.toString()}`);
+            cacheKeysToInvalidate.push(VideoCacheKeys.single(s._id.toString()));
+          });
+        } catch (_) {}
+      }
       invalidateCache(cacheKeysToInvalidate).catch(err => console.error('⚠️ direct-complete: Cache invalidation failed:', err.message));
     }
 

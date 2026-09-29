@@ -105,14 +105,14 @@ class AdService {
   Future<Map<String, dynamic>> createAdWithCredits({
     required String idempotencyKey,
     required String title,
-    required String description,
+    String? description,
     String? imageUrl,
     String? videoUrl,
     String? link,
     required String adType,
     required double budget,
-    required String targetAudience,
-    required List<String> targetKeywords,
+    String targetAudience = 'all',
+    List<String> targetKeywords = const [],
     DateTime? startDate,
     DateTime? endDate,
     int? minAge,
@@ -145,6 +145,11 @@ class AdService {
         throw Exception('User not authenticated');
       }
 
+      final effectiveDescription =
+          (description != null && description.trim().isNotEmpty)
+              ? description.trim()
+              : title;
+
       final cpm = adType == 'banner' ? AppConfig.bannerCpm : AppConfig.fixedCpm;
       final impressions = AppConfig.calculateImpressionsFromBudgetWithCpm(
         budget,
@@ -166,7 +171,7 @@ class AdService {
       final requestData = {
         'idempotencyKey': idempotencyKey,
         'title': title,
-        'description': description,
+        'description': effectiveDescription,
         'imageUrl': imageUrl,
         'videoUrl': videoUrl,
         'link': link,
@@ -200,12 +205,9 @@ class AdService {
       }
 
       // **NEW: Validate required fields before sending**
-      if (title.isEmpty ||
-          description.isEmpty ||
-          adType.isEmpty ||
-          budget <= 0) {
+      if (title.isEmpty || adType.isEmpty || budget <= 0) {
         throw Exception(
-            'Required fields validation failed: title=$title, description=$description, adType=$adType, budget=$budget');
+            'Required fields validation failed: title=$title, adType=$adType, budget=$budget');
       }
 
       final uploaderId = userData['googleId'] ?? userData['id'];

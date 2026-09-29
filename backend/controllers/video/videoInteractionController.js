@@ -5,8 +5,8 @@ import WatchHistory from '../../models/WatchHistory.js';
 import redisService from '../../services/caching/redisService.js';
 import { invalidateCache, VideoCacheKeys } from '../../middleware/cacheMiddleware.js';
 import { updateCreatorDailyStats } from '../../utils/analyticsUtils.js';
-import { convertLikedByToGoogleIds } from '../../utils/videoUtils.js';
 import { serializeVideos } from '../../utils/serializers/videoSerializer.js';
+import { populateEpisodesForVideos } from './videoFeedController.js';
 
 // --- BATCH PROCESSING BUFFERS (Write-Behind Caching) ---
 const viewBuffer = new Map(); // videoId -> count
@@ -146,6 +146,44 @@ export const trackWatch = async (req, res) => {
     if (!identityId) return res.status(400).json({ error: 'User identifier required' });
     if (!videoId || !mongoose.Types.ObjectId.isValid(videoId)) return res.status(400).json({ error: 'Invalid video ID' });
 
+    const video = await Video.findById(videoId).select('uploader views').lean();
+    if (!video) return res.status(404).json({ error: 'Video not found' });
+
+    // 1. SELF-VIEW CHECK: Creator viewing their own video shouldn't inflate views
+    const isSelfView = video.uploader && (
+      video.uploader.toString() === identityId.toString() ||
+      video.uploader.toString() === req.user?._id?.toString() ||
+      video.uploader.toString() === req.user?.googleId?.toString()
+    );
+
+    // 2. REPEAT LOOP PROTECTION: Max 5 views per 24 hours per user/device on the SAME video
+    const MAX_DAILY_VIDEO_VIEWS = 5;
+    let shouldCountView = !isSelfView;
+
+    if (shouldCountView) {
+      if (redisService.getConnectionStatus()) {
+        const loopKey = `video:daily_views:${identityId}:${videoId}`;
+        const todayViews = await redisService.incr(loopKey);
+        if (todayViews === 1) {
+          await redisService.expire(loopKey, 86400); // 24 hours TTL
+        }
+        if (todayViews > MAX_DAILY_VIDEO_VIEWS) {
+          shouldCountView = false;
+        }
+      } else {
+        // Fallback: Check existing WatchHistory entry
+        const existingWatch = await WatchHistory.findOne({ userId: identityId, videoId }).lean();
+        if (existingWatch) {
+          const now = Date.now();
+          const lastWatched = existingWatch.lastWatchedAt ? new Date(existingWatch.lastWatchedAt).getTime() : 0;
+          const isWithin24h = (now - lastWatched) < 24 * 60 * 60 * 1000;
+          if (isWithin24h && (existingWatch.watchCount || 1) >= MAX_DAILY_VIDEO_VIEWS) {
+            shouldCountView = false;
+          }
+        }
+      }
+    }
+
     const SKIM_THRESHOLD = 5;
     const isSkim = duration < SKIM_THRESHOLD;
 
@@ -155,27 +193,33 @@ export const trackWatch = async (req, res) => {
         await redisService.addToSet(skimKey, [videoId]);
         await redisService.expire(skimKey, 259200);
       }
-      await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+      if (shouldCountView) {
+        await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+      }
     } else {
-      await WatchHistory.trackWatch(identityId, videoId, { duration, completed, isAuthenticated });
-      const video = await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
-      
-      if (video && video.uploader) {
-        updateCreatorDailyStats(video.uploader, { 
-          views: 1, 
-          watchTime: duration 
-        }).catch(err => console.error('DailyStats Error:', err));
+      // Update watch history. Only increment watchCount if shouldCountView is true
+      await WatchHistory.trackWatch(identityId, videoId, { 
+        duration, 
+        completed, 
+        isAuthenticated, 
+        shouldIncrementCount: shouldCountView 
+      });
+
+      if (shouldCountView) {
+        await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+        
+        if (video.uploader) {
+          updateCreatorDailyStats(video.uploader, { 
+            views: 1, 
+            watchTime: duration 
+          }).catch(err => console.error('DailyStats Error:', err));
+        }
       }
 
       if (redisService.getConnectionStatus()) await redisService.addToLongTermWatchHistory(identityId, [videoId.toString()]);
     }
 
-    // OPTIMIZATION: Removed aggressive clearCache on every view.
-    // The Bloom Filter already handles "unwatched" logic, so we don't need 
-    // to hammer Redis with 20+ DEL commands on every single watch event.
-
-
-    res.json({ success: true, message: 'Watch tracked successfully' });
+    res.json({ success: true, message: 'Watch tracked successfully', counted: shouldCountView });
   } catch (error) {
     console.error('❌ Error tracking watch:', error);
     res.status(500).json({ error: 'Failed to track watch', message: error.message });
@@ -246,7 +290,7 @@ export const syncWatchEvents = async (req, res) => {
 
       const eventDate = timestamp ? new Date(timestamp) : new Date();
       
-      videoViewIncrements[videoId] = (videoViewIncrements[videoId] || 0) + 1;
+      videoViewIncrements[videoId] = Math.min((videoViewIncrements[videoId] || 0) + 1, 3);
 
       ops.push({
         updateOne: {
@@ -453,10 +497,17 @@ export const getSavedVideos = async (req, res) => {
       .lean();
 
     const validSavedVideos = savedEntries
-      .map(entry => entry.video)
+      .map(entry => {
+        if (!entry.video) return null;
+        return {
+          ...entry.video,
+          isSaved: true
+        };
+      })
       .filter(v => v != null);
 
     const requestingUserObjectIdStr = user._id.toString();
+    await populateEpisodesForVideos(validSavedVideos);
     const serializedVideos = serializeVideos(validSavedVideos, req.apiVersion, requestingUserObjectIdStr, req.traceId);
 
     res.json(serializedVideos);

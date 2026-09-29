@@ -1,0 +1,20 @@
+{
+  "name": "@vayu/recsys-core",
+  "version": "1.0.0",
+  "description": "Zero-cost, low-latency, plug-and-play recommendation and de-duplication engine for Node.js",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "recommendation-system",
+    "feed",
+    "recsys",
+    "deduplication",
+    "seen-filter",
+    "zero-cost"
+  ],
+  "author": "Vayug Team",
+  "license": "MIT"
+}

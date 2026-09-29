@@ -5,7 +5,7 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
       {int page = 1,
       bool append = false,
       bool useCache = true,
-      bool clearSession = true,
+      bool clearSession = false,
       bool forceResetIndex = false}) async {
     try {
       AppLogger.log(
@@ -104,12 +104,14 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
         return;
       }
 
+      final currentShownIds = _videos.map((v) => v.id).where((id) => id.isNotEmpty).take(25).toList();
       final response = await _videoService.getVideos(
         page: page,
         limit: _videosPerPage,
         videoType: widget.videoType,
         clearSession: clearSession,
         cursor: (page > 1) ? _nextCursor : null, // **NEW: Use cursor for pagination**
+        excludeIds: currentShownIds.isNotEmpty ? currentShownIds : null,
       );
 
       List<VideoModel> newVideos;
@@ -208,6 +210,8 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
       if (append) {
         safeSetState(() {
           if (newVideos.isNotEmpty) {
+            final existingIds = _videos.map((v) => v.id).toSet();
+            newVideos.removeWhere((v) => existingIds.contains(v.id));
             if (_pinnedDeepLinkVideo != null) {
               newVideos.removeWhere((v) => v.id == _pinnedDeepLinkVideo!.id);
             }
@@ -525,6 +529,7 @@ extension _VideoFeedDataOperations on _VideoFeedAdvancedState {
       video.isLiked = effectiveIsLiked;
       _getOrCreateNotifier<bool>(_isLikedVN, video.id, effectiveIsLiked);
       _getOrCreateNotifier<int>(_likeCountVN, video.id, video.likes);
+      _getOrCreateNotifier<bool>(_isSavedVN, video.id, video.isSaved);
     }
   }
 

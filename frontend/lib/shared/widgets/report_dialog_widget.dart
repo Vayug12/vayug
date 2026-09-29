@@ -60,7 +60,8 @@ class _ReportDialogWidgetState extends State<ReportDialogWidget> {
       Navigator.of(context).pop(true);
       VayuSnackBar.showSuccess(context, 'Report submitted. Thank you.');
     } else {
-      VayuSnackBar.showError(context, 'Failed to submit report.');
+      final errorMsg = _reportService.lastErrorMessage ?? 'Failed to submit report.';
+      VayuSnackBar.showError(context, errorMsg);
     }
 
     if (mounted) setState(() => _submitting = false);

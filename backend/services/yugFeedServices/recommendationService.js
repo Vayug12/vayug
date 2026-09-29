@@ -37,13 +37,19 @@ class RecommendationService {
     } = videoData;
 
     const commentCount = Array.isArray(comments) ? comments.length : (comments || 0);
-
-    const watchScore = this._legacyCalculateWatchScore(totalWatchTime, duration, views);
-    const engagementScore = this._legacyCalculateWilsonScore(likes + commentCount, views);
+    const avgWatchTime = (views > 0) ? (totalWatchTime / views) : 0;
+    const watchScore = (!duration || views <= 0) ? 0 : 0.5 * (avgWatchTime / duration) + 0.5 * (Math.min(avgWatchTime, 15) / 15);
+    
+    let engagementScore = 0;
+    if (views > 0) {
+      const p = ((likes + commentCount) + 0.5) / (views + 5);
+      const z = 1.96;
+      engagementScore = (p + (z * z) / (2 * views) - z * Math.sqrt((p * (1 - p) + (z * z) / (4 * views)) / views)) / (1 + (z * z) / views);
+    }
     const shareScore = Math.min((shares / (views || 1)) / 0.1, 1);
     
     const now = new Date();
-    const ageInHours = (now - new Date(uploadedAt)) / (1000 * 60 * 60);
+    const ageInHours = (now - new Date(uploadedAt || now)) / (1000 * 60 * 60);
     const freshnessBoost = ageInHours < 120 ? 3.0 * (1 - (ageInHours / 120)) : 0;
     
     const skipPenalty = Math.max(0, (views > 0 ? skipCount / views : 0) * 2.0);
@@ -51,19 +57,6 @@ class RecommendationService {
     const recencyBoost = 0.1 + (0.9 / (1 + (ageInHours / 24) * 0.1));
 
     return Math.max((baseScore + freshnessBoost - skipPenalty) * recencyBoost, 0.01);
-  }
-
-  static _legacyCalculateWatchScore(totalWatchTime, videoDuration, totalViews) {
-    if (!videoDuration || totalViews <= 0) return 0;
-    const avgWatchTime = totalWatchTime / totalViews;
-    return 0.5 * (avgWatchTime / videoDuration) + 0.5 * (Math.min(avgWatchTime, 15) / 15);
-  }
-
-  static _legacyCalculateWilsonScore(positive, total) {
-    if (total <= 0) return 0;
-    const p = (positive + 0.5) / (total + 5);
-    const z = 1.96;
-    return (p + (z * z) / (2 * total) - z * Math.sqrt((p * (1 - p) + (z * z) / (4 * total)) / total)) / (1 + (z * z) / total);
   }
 
   /**

@@ -134,23 +134,28 @@ WatchHistorySchema.statics.getLeastRecentlyWatchedVideoIds = async function(
  */
 WatchHistorySchema.statics.trackWatch = async function(userId, videoId, options = {}) {
   try {
-    const { duration = 0, completed = false, isAuthenticated = false } = options;
+    const { duration = 0, completed = false, isAuthenticated = false, shouldIncrementCount = true } = options;
     
+    const updateObj = {
+      $set: {
+        lastWatchedAt: new Date(),
+        watchDuration: duration,
+        completed: completed,
+        isAuthenticated: isAuthenticated
+      },
+      $setOnInsert: {
+        watchedAt: new Date()
+      }
+    };
+
+    if (shouldIncrementCount) {
+      updateObj.$inc = { watchCount: 1 };
+    }
+
     // Update or create watch history entry
     const watchEntry = await this.findOneAndUpdate(
       { userId: userId, videoId: videoId },
-      {
-        $set: {
-          lastWatchedAt: new Date(),
-          watchDuration: duration,
-          completed: completed,
-          isAuthenticated: isAuthenticated
-        },
-        $inc: { watchCount: 1 },
-        $setOnInsert: {
-          watchedAt: new Date()
-        }
-      },
+      updateObj,
       {
         upsert: true,
         new: true

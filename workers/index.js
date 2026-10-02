@@ -22,6 +22,34 @@ export default {
       return handleApiGateway(request, env);
     }
 
+    // ROUTE: Serve R2 Media directly (uploads, thumbnails, hls, etc.)
+    const cleanPath = url.pathname.replace(/^\/+/, '');
+    if ((request.method === 'GET' || request.method === 'HEAD') && 
+        (cleanPath.startsWith('uploads/') || cleanPath.startsWith('videos/') || cleanPath.startsWith('thumbnails/') || cleanPath.startsWith('hls/'))) {
+      try {
+        const object = await env.MY_BUCKET.get(cleanPath, {
+          range: request.headers.get('range'),
+          onlyIf: request.headers,
+        });
+
+        if (object) {
+          const headers = new Headers();
+          object.writeHttpMetadata(headers);
+          headers.set('etag', object.httpEtag);
+          headers.set('Access-Control-Allow-Origin', '*');
+          headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+          headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+
+          return new Response(object.body, {
+            status: object.body ? (request.headers.get('range') ? 206 : 200) : 304,
+            headers
+          });
+        }
+      } catch (err) {
+        console.error('R2 read error:', err);
+      }
+    }
+
     // Default: Forward to Backend (Origin) instead of 404
     console.log(`⏩ Passthrough: ${request.method} ${url.pathname}`);
     const passthroughRequest = new Request(`${env.BACKEND_URL}${url.pathname}${url.search}`, request);

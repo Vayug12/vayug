@@ -2,11 +2,15 @@ import expressLoader from './express.js';
 import mongooseLoader from './mongoose.js';
 import redisLoader from './redis.js';
 import jobsLoader from './jobs.js';
+import appConfigSyncLoader from './appConfigSync.js';
 
 export default async ({ expressApp }) => {
   // 1. Initial configuration (DB happens in background but we start the process)
   await mongooseLoader();
   console.log('✌️ DB Loaded');
+
+  // Auto-sync force update version control in MongoDB
+  await appConfigSyncLoader();
 
   // 2. Redis connection
   await redisLoader();

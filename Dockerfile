@@ -23,6 +23,13 @@ RUN npm ci --only=production
 # Copy application code
 COPY backend/ .
 
+# feedQueueService resolves ../../../packages relative to /app/services/yugFeedServices.
+COPY packages/recsys-core/package.json packages/recsys-core/index.js /packages/recsys-core/
+COPY packages/recsys-core/src/ /packages/recsys-core/src/
+
+# Fail the build if the shared recommendation module cannot load.
+RUN node --input-type=module -e "import { FeedOrchestrator } from '../packages/recsys-core/index.js'; new FeedOrchestrator();"
+
 # Create persistent/temp directories
 RUN mkdir -p logs temp uploads
 

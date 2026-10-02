@@ -40,17 +40,14 @@ class _ForcedUpdateWidgetState extends State<ForcedUpdateWidget> {
 
   Future<void> _checkVersion() async {
     try {
-      // `refresh: false` reuses the config AppInitializationManager already
-      // fetched at startup — a local version comparison, no extra network call.
       final result = await AppRemoteConfigService.instance
-          .checkAppVersion(refresh: false);
+          .checkAppVersion(refresh: true);
 
       if (mounted) {
         setState(() => _versionCheck = result);
       }
     } catch (e) {
       AppLogger.log('❌ ForcedUpdateWidget: Error checking version: $e');
-      // Assume supported if the check fails — never block a working app.
       if (mounted) {
         setState(() {
           _versionCheck = VersionCheckResult(
@@ -65,13 +62,17 @@ class _ForcedUpdateWidgetState extends State<ForcedUpdateWidget> {
   }
 
   Future<void> _openUpdateUrl() async {
-    if (_versionCheck?.updateUrl != null) {
-      final url = Uri.parse(_versionCheck!.updateUrl!);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
+    final updateUrlStr = _versionCheck?.updateUrl ??
+        'https://play.google.com/store/apps/details?id=com.snehayog.app';
+    final url = Uri.parse(updateUrlStr);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      final marketUri = Uri.parse('market://details?id=com.snehayog.app');
+      if (await canLaunchUrl(marketUri)) {
+        await launchUrl(marketUri, mode: LaunchMode.externalApplication);
       } else {
-        AppLogger.log(
-            '❌ ForcedUpdateWidget: Cannot launch URL: ${_versionCheck!.updateUrl}');
+        AppLogger.log('❌ ForcedUpdateWidget: Cannot launch URL: $updateUrlStr');
       }
     }
   }

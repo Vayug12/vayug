@@ -101,6 +101,11 @@ extension _VideoFeedActions on _VideoFeedAdvancedState {
           const Duration(milliseconds: 500),
           _triggerSignInOptions,
         );
+      } else if (e is Exception) {
+        final cleanMsg = errorString.replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+        if (cleanMsg.isNotEmpty && !cleanMsg.startsWith('Failed to like video:')) {
+          errorMessage = cleanMsg;
+        }
       }
       _showSnackBar(errorMessage, isError: true);
     } finally {

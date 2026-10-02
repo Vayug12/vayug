@@ -67,6 +67,36 @@ class CloudflareR2Service {
   }
 
   /**
+   * Stream a file from R2 directly to an HTTP response (Range support for video streaming)
+   */
+  async streamFile(key, res, range) {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        Range: range || undefined,
+      });
+
+      const response = await this.s3Client.send(command);
+      if (response.ContentType) res.setHeader('Content-Type', response.ContentType);
+      if (response.ContentLength) res.setHeader('Content-Length', response.ContentLength);
+      if (response.ContentRange) {
+        res.setHeader('Content-Range', response.ContentRange);
+        res.status(206);
+      } else {
+        res.status(200);
+      }
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      response.Body.pipe(res);
+    } catch (err) {
+      if (!res.headersSent) res.status(404).send('File Not Found');
+    }
+  }
+
+  /**
    * Delete a file from R2
    * @param {string} key - R2 file key
    */
@@ -148,22 +178,22 @@ class CloudflareR2Service {
    */
   getPublicUrl(key) {
     if (!key) return '';
-    if (key.startsWith('http')) return key;
+    const cleanDomain = (this.publicDomain && !this.publicDomain.includes('snehayog.site'))
+      ? this.publicDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+      : 'vayugai.com';
+
+    if (key.startsWith('http')) {
+      if (key.includes('cdn.snehayog.site') || key.includes('vayug-edge.factshorts1.workers.dev')) {
+        return key.replace(/https?:\/\/(cdn\.snehayog\.site|vayug-edge\.factshorts1\.workers\.dev)/g, `https://${cleanDomain}`);
+      }
+      return key;
+    }
 
     // **FIX: Normalize key path and ENCODE each segment for URL safety**
     const normalizedKey = key.startsWith('/') ? key.substring(1).replace(/\\/g, '/') : key.replace(/\\/g, '/');
     const encodedKey = normalizedKey.split('/').map(segment => encodeURIComponent(segment)).join('/');
     
-    if (this.publicDomain) {
-      // Use custom domain with HTTPS
-      const cleanDomain = this.publicDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      const url = `https://${cleanDomain}/${encodedKey}`;
-      return url;
-    }
-
-    // Fallback to direct R2 URL if custom domain not set
-    const directR2Url = `https://${this.bucketName}.${this.accountId}.r2.cloudflarestorage.com/${encodedKey}`;
-    return directR2Url;
+    return `https://${cleanDomain}/${encodedKey}`;
   }
 
   

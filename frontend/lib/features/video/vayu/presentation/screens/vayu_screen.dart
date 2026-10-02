@@ -566,25 +566,31 @@ class VayuScreenState extends ConsumerState<VayuScreen> {
                   ),
                 ),
               ),
-              // Duration Badge
+              // Duration Badge (Compact Pill)
               if (video.duration.inSeconds > 0)
                 Positioned(
                   bottom: AppSpacing.spacing2,
                   right: AppSpacing.spacing2,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.spacing2,
+                      vertical: AppSpacing.spacing1 * 0.75,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(4),
+                      color: Colors.black.withValues(alpha: 0.75),
+                      borderRadius: AppRadius.borderRadiusPill,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        width: 0.5,
+                      ),
                     ),
                     child: Text(
                       FormatUtils.formatDuration(video.duration),
                       style: AppTypography.labelSmall.copyWith(
                         color: Colors.white,
                         fontWeight: AppTypography.weightBold,
-                        fontSize: 11,
-                        letterSpacing: 0.5,
+                        fontSize: 10,
+                        letterSpacing: 0.4,
                       ),
                     ),
                   ),

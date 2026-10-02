@@ -34,6 +34,9 @@ class CreatorRevenueScreen extends ConsumerStatefulWidget {
 }
 
 class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
+  /// Feature flag for Paid Video section. Set to true when testing and launching.
+  static const bool _enablePaidVideo = false;
+
   final AdService _adService = AdService();
   final AuthService _authService = AuthService();
   final AnalyticsService _analyticsService = AnalyticsService();
@@ -70,7 +73,7 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
 
         await Future.wait([
           _fetchRevenueData(forceRefresh),
-          _fetchPaidVideoSales(),
+          if (_enablePaidVideo) _fetchPaidVideoSales(),
           _fetchAnalytics(userId),
           _fetchRemovedVideos(),
           // We'll use a local fetch method to handle the async gap correctly
@@ -251,8 +254,10 @@ class _CreatorRevenueScreenState extends ConsumerState<CreatorRevenueScreen> {
         child: Column(
           children: [
             _buildRevenueOverviewCard(),
-            AppSpacing.vSpace24,
-            _buildPaidVideoSalesCard(),
+            if (_enablePaidVideo) ...[
+              AppSpacing.vSpace24,
+              _buildPaidVideoSalesCard(),
+            ],
             AppSpacing.vSpace24,
             _buildRevenueBreakdownCard(),
             AppSpacing.vSpace24,

@@ -18,7 +18,9 @@ package-lock.json (Keep for build? No, Dockerfile uses its own npm ci)
 
 # Frontend & External Projects (The biggest source of bloat)
 frontend/
-packages/
+# Keep the backend's shared recommendation package in the build context.
+packages/*
+!packages/recsys-core/
 workers/
 terraform/
 **/build/

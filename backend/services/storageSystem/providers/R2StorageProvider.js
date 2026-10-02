@@ -87,17 +87,21 @@ class R2StorageProvider extends IStorageProvider {
 
   getPublicUrl(key) {
     if (!key) return '';
-    if (key.startsWith('http')) return key;
+    const cleanDomain = (this.publicDomain && !this.publicDomain.includes('snehayog.site'))
+      ? this.publicDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+      : 'vayugai.com';
+
+    if (key.startsWith('http')) {
+      if (key.includes('cdn.snehayog.site') || key.includes('vayug-edge.factshorts1.workers.dev')) {
+        return key.replace(/https?:\/\/(cdn\.snehayog\.site|vayug-edge\.factshorts1\.workers\.dev)/g, `https://${cleanDomain}`);
+      }
+      return key;
+    }
 
     const normalizedKey = key.startsWith('/') ? key.substring(1).replace(/\\/g, '/') : key.replace(/\\/g, '/');
     const encodedKey = normalizedKey.split('/').map(segment => encodeURIComponent(segment)).join('/');
     
-    if (this.publicDomain) {
-      const cleanDomain = this.publicDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      return `https://${cleanDomain}/${encodedKey}`;
-    }
-
-    return `https://${this.bucketName}.${this.accountId}.r2.cloudflarestorage.com/${encodedKey}`;
+    return `https://${cleanDomain}/${encodedKey}`;
   }
 }
 

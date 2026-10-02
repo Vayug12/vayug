@@ -50,7 +50,7 @@ class UploadScreen extends ConsumerStatefulWidget {
 
 class _UploadScreenState extends ConsumerState<UploadScreen> {
   /// Feature flag for Paid Video upload. Set to true when testing and launching.
-  static const bool _enablePaidVideo = true;
+  static const bool _enablePaidVideo = false;
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _linkController = TextEditingController();
@@ -942,7 +942,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   Widget _buildUploadForm(UploadStateManager state) {
     return Column(
       children: [
-        if (state.isPaidVideo) ...[
+        if (_enablePaidVideo && state.isPaidVideo) ...[
           Container(
             padding: AppSpacing.edgeInsetsAll12,
             decoration: BoxDecoration(

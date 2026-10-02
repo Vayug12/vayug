@@ -43,6 +43,7 @@ import 'package:vayug/shared/widgets/report_dialog_widget.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
 import 'package:vayug/core/providers/auth_providers.dart';
+import 'package:vayug/features/auth/presentation/controllers/auth_flow.dart';
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:vayug/core/providers/navigation_providers.dart';
@@ -203,6 +204,7 @@ class _VayuLongFormPlayerScreenState
   String? _currentUserId;
 
   bool _isSaving = false;
+  final Map<String, bool> _likeInProgress = {};
   double _playbackSpeed = 1.0;
   final List<double> _playbackSpeedOptions = <double>[
     0.5,
@@ -1720,6 +1722,58 @@ class _VayuLongFormPlayerScreenState
     });
   }
 
+  Future<void> _handleToggleLike([int? requestedIndex]) async {
+    final index = requestedIndex ?? _currentIndex;
+    if (index < 0 || index >= _videos.length) return;
+    final video = _videos[index];
+
+    if (_likeInProgress[video.id] == true) return;
+
+    // Check if user is signed in, if not trigger Google Sign-In
+    final authController = ref.read(googleSignInProvider);
+    if (!authController.isSignedIn) {
+      final result = await AuthFlow.signIn(context, ref);
+      if (!result.isSuccess || !mounted) {
+        return;
+      }
+    }
+
+    final wasLiked = video.isLiked;
+    final originalLikes = video.likes;
+    final targetLiked = !wasLiked;
+    final targetLikes = targetLiked
+        ? originalLikes + 1
+        : (originalLikes - 1).clamp(0, 999999999).toInt();
+
+    setState(() {
+      video.isLiked = targetLiked;
+      video.likes = targetLikes;
+    });
+    HapticFeedback.lightImpact();
+
+    try {
+      _likeInProgress[video.id] = true;
+      final updatedVideo = await _videoService.toggleLike(video.id);
+      if (mounted) {
+        setState(() {
+          video.isLiked = updatedVideo.isLiked;
+          video.likes = updatedVideo.likes;
+        });
+      }
+    } catch (e) {
+      AppLogger.log('❌ Error toggling like in VayuLongFormPlayer: $e');
+      if (mounted) {
+        setState(() {
+          video.isLiked = wasLiked;
+          video.likes = originalLikes;
+        });
+        _showSnackBar('Failed to update like', type: VayuSnackBarType.error);
+      }
+    } finally {
+      _likeInProgress[video.id] = false;
+    }
+  }
+
   Future<void> _handleToggleSave([int? requestedIndex]) async {
     if (_isSaving) return;
     final index = requestedIndex ?? _currentIndex;
@@ -2551,7 +2605,8 @@ class _VayuLongFormPlayerScreenState
           }
         },
         child: Scaffold(
-          backgroundColor: AppColors.backgroundPrimary,
+          backgroundColor:
+              (isLandscape || _isFullScreenManual) ? Colors.black : AppColors.backgroundPrimary,
           body: Stack(children: [
             PageView.builder(
               controller: _pageController,
@@ -2680,6 +2735,7 @@ class _VayuLongFormPlayerScreenState
           metadataSection: VayuMetadataSection(
               video: v,
               isPortrait: isPortrait,
+              onLike: () => _handleToggleLike(index),
               onShare: () => _showShareOptions(v),
               onSave: () => _handleToggleSave(index),
               onComments: () => _handleOpenComments(v),

@@ -364,5 +364,58 @@ router.get(
   })
 );
 
+/**
+ * POST /api/app-config/set-version
+ * Remotely update minimum supported version for force update
+ */
+router.post(
+  '/set-version',
+  asyncHandler(async (req, res) => {
+    const adminKey = req.headers['x-admin-key'] || req.query.adminKey || req.body?.adminKey;
+    const configuredKey = process.env.ADMIN_DASHBOARD_KEY;
+    if (configuredKey && adminKey !== configuredKey) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid admin key' });
+    }
+
+    const { minVersion = '3.6.4', latestVersion = '3.6.4', platform = 'android', environment = 'production', message } = req.body || {};
+    
+    const filter = { platform, environment };
+    let config = await AppConfig.findOne(filter).sort({ createdAt: -1 });
+    if (!config) {
+      config = new AppConfig({
+        platform,
+        environment,
+        isActive: true,
+        versionControl: {
+          minSupportedAppVersion: minVersion,
+          latestAppVersion: latestVersion,
+          updateUrl: {
+            android: 'https://play.google.com/store/apps/details?id=com.snehayog.app',
+            ios: 'https://apps.apple.com/app/snehayog'
+          }
+        }
+      });
+    } else {
+      config.versionControl.minSupportedAppVersion = minVersion;
+      config.versionControl.latestAppVersion = latestVersion;
+      if (message) config.versionControl.forceUpdateMessage = message;
+    }
+
+    await config.save();
+
+    if (redisService.getConnectionStatus()) {
+      try {
+        await redisService.del(`app_config:${platform}:${environment}`);
+      } catch (_) {}
+    }
+
+    res.json({
+      success: true,
+      message: `Force update version set to ${minVersion}`,
+      versionControl: config.versionControl
+    });
+  })
+);
+
 export default router;
 

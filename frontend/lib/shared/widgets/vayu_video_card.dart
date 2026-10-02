@@ -3,6 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:vayug/features/video/core/data/models/video_model.dart';
 import 'package:vayug/core/design/colors.dart';
 import 'package:vayug/core/design/typography.dart';
+import 'package:vayug/core/design/spacing.dart';
+import 'package:vayug/core/design/radius.dart';
 import 'package:vayug/shared/utils/format_utils.dart';
 import 'package:vayug/shared/widgets/interactive_scale_button.dart';
 
@@ -41,20 +43,28 @@ class VayuVideoCard extends StatelessWidget {
                 ),
                 if (video.duration.inSeconds > 0)
                   Positioned(
-                    bottom: 8,
-                    right: 8,
+                    bottom: AppSpacing.spacing2,
+                    right: AppSpacing.spacing2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.spacing2,
+                        vertical: AppSpacing.spacing1 * 0.75,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(4),
+                        color: Colors.black.withValues(alpha: 0.75),
+                        borderRadius: AppRadius.borderRadiusPill,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          width: 0.5,
+                        ),
                       ),
                       child: Text(
                         FormatUtils.formatDuration(video.duration),
-                        style: const TextStyle(
+                        style: AppTypography.labelSmall.copyWith(
                           color: Colors.white,
+                          fontWeight: AppTypography.weightBold,
                           fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.4,
                         ),
                       ),
                     ),

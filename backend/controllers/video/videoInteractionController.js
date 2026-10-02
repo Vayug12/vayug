@@ -7,6 +7,7 @@ import { invalidateCache, VideoCacheKeys } from '../../middleware/cacheMiddlewar
 import { updateCreatorDailyStats } from '../../utils/analyticsUtils.js';
 import { serializeVideos } from '../../utils/serializers/videoSerializer.js';
 import { populateEpisodesForVideos } from './videoFeedController.js';
+import { convertLikedByToGoogleIds } from '../../utils/videoUtils.js';
 
 // --- BATCH PROCESSING BUFFERS (Write-Behind Caching) ---
 const viewBuffer = new Map(); // videoId -> count

@@ -63,6 +63,27 @@ export default async ({ app }) => {
   // Middleware
   app.use(traceMiddleware);
   app.use(compression());
+
+  // Automatically rewrite expired/fallback CDN URLs to vayugai.com in all JSON responses
+  app.use((req, res, next) => {
+    const originalJson = res.json;
+    res.json = function(body) {
+      if (body && typeof body === 'object') {
+        try {
+          const str = JSON.stringify(body);
+          if (str.includes('cdn.snehayog.site') || str.includes('vayug-edge.factshorts1.workers.dev')) {
+            const replaced = str.replace(/https?:\/\/(cdn\.snehayog\.site|vayug-edge\.factshorts1\.workers\.dev)/g, 'https://vayugai.com');
+            return originalJson.call(this, JSON.parse(replaced));
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      return originalJson.call(this, body);
+    };
+    next();
+  });
+
   // Must be mounted before express.static so the database-backed sitemap wins
   // over the legacy static sitemap.xml file.
   app.use(sitemapRoutes);
@@ -75,6 +96,8 @@ export default async ({ app }) => {
       if (!origin) return callback(null, true);
 
       const allowedOrigins = [
+        'https://vayugai.com',
+        /^https:\/\/([a-z0-9-]+\.)?vayugai\.com$/,
         'https://snehayog.site',
         'https://vayug.fly.dev',
         'http://localhost:5001',
@@ -84,9 +107,11 @@ export default async ({ app }) => {
         /^http:\/\/127\.0\.0\.1:\d+$/,
         'http://10.164.35.18/:5001',
         'http://172.20.10.2:5001',
+        
         'http://10.78.84.104:5001',
-        'http://192.168.0.198:5001',
+        'http://192.168.10.115:5001',
         'http://192.168.0.197:5001',
+        'http://192.168.2.215:5001',
         'http://10.78.84.18:5001',
         /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
         'http://10.0.2.2:5001',
@@ -159,6 +184,20 @@ export default async ({ app }) => {
 
   // Static files serving
   app.use('/uploads', express.static(path.join(backendRoot, 'uploads')));
+  
+  // R2 Media Streaming Fallback (serves files directly from Cloudflare R2 if not on local disk)
+  app.get('/uploads/*', async (req, res, next) => {
+    try {
+      const key = `uploads/${req.params[0]}`;
+      const r2Service = (await import('../services/uploadServices/cloudflareR2Service.js')).default;
+      if (r2Service && r2Service.streamFile) {
+        return await r2Service.streamFile(key, res, req.headers.range);
+      }
+      next();
+    } catch (_) {
+      next();
+    }
+  });
   app.use('/admin', express.static(path.join(backendRoot, 'admin')));
 
   // HLS serving

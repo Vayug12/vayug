@@ -66,7 +66,8 @@ class VideoControllerManager {
     // Prefer lowQualityUrl if it's Cloudflare/CDN
     if (video.lowQualityUrl != null && video.lowQualityUrl!.isNotEmpty) {
       final lower = video.lowQualityUrl!.toLowerCase();
-      if (lower.contains('cdn.snehayog.site') ||
+      if (lower.contains('vayugai.com') ||
+          lower.contains('cdn.snehayog.site') ||
           lower.contains('cdn.snehayog.com') ||
           lower.contains('r2.cloudflarestorage.com')) {
         AppLogger.log('✅ SELECTED: Low Quality URL (CDN/R2)');
@@ -76,7 +77,8 @@ class VideoControllerManager {
 
     // No HLS playlist: use the original URL when it is already CDN-served.
     final origLower = video.videoUrl.toLowerCase();
-    final isCdn = origLower.contains('cdn.snehayog.site') ||
+    final isCdn = origLower.contains('vayugai.com') ||
+        origLower.contains('cdn.snehayog.site') ||
         origLower.contains('cdn.snehayog.com') ||
         origLower.contains('r2.cloudflarestorage.com') ||
         origLower.contains('/hls/');

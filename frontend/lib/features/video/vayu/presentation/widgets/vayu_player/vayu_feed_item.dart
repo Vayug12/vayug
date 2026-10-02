@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
@@ -105,23 +106,47 @@ class VayuFeedItem extends ConsumerStatefulWidget {
 // ran. The feed screen itself is kept alive for tab switches; individual pages
 // are cheap to rebuild from the video model and the pooled controller.
 class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
-  double _scale = 1.0;
-  Offset _offset = Offset.zero;
-  double _baseScale = 1.0;
+  bool _isZoomedToFill = false;
+  double _pinchScale = 1.0;
+  bool _isPinching = false;
+  Timer? _zoomToastTimer;
+  String? _zoomToastText;
+  bool _showZoomToast = false;
   int _pointers = 0;
-  bool _isScaling = false;
 
   // Gesture tracking
   GestureType _activeGesture = GestureType.none;
   double _dragHorizontalDeltaAccumulated = 0;
-  double _dragVerticalDeltaAccumulated = 0;
   static const double _gestureThreshold = 12.0;
+
+  @override
+  void didUpdateWidget(covariant VayuFeedItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.video.id != oldWidget.video.id ||
+        widget.index != oldWidget.index) {
+      _isZoomedToFill = false;
+      _pinchScale = 1.0;
+      _isPinching = false;
+      _showZoomToast = false;
+      _zoomToastTimer?.cancel();
+    }
+  }
+
+  @override
+  void dispose() {
+    _zoomToastTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final orientation = MediaQuery.orientationOf(context);
     final isFull =
         orientation == Orientation.landscape || widget.isFullScreenManual;
+    if (!isFull && _isZoomedToFill) {
+      _isZoomedToFill = false;
+      _pinchScale = 1.0;
+    }
     final viewport = MediaQuery.sizeOf(context);
     final playerInsets = VayuPlayerLayout.playerInsets(
       context,
@@ -131,54 +156,29 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
     // We use a Stack as the root to maintain widget tree stability across orientation changes
     return Stack(
       children: [
-        // ── LAYER 1: Ambient blurred thumbnail (Portrait & Landscape) ──────────
-        // A tiny decode stretched full-screen looks like a gaussian blur but
-        // costs almost nothing to paint — a live ImageFiltered blur here
-        // repaints on every frame of a rotation and drops frames.
-        if (widget.video.thumbnailUrl.isNotEmpty)
+        // ── LAYER 1: Pure Black Background (YouTube style letterbox / pillarbox) ──────────
+        const Positioned.fill(
+          child: ColoredBox(color: Colors.black),
+        ),
+
+        // ── LAYER 2: Dark / Gradient overlay — keeps foreground content readable in portrait ──────────
+        if (!isFull)
           Positioned.fill(
-            child: RepaintBoundary(
-              child: CachedNetworkImage(
-                imageUrl: widget.video.thumbnailUrl,
-                fit: BoxFit.cover,
-                memCacheWidth: 24,
-                filterQuality: FilterQuality.low,
-                fadeInDuration: Duration.zero,
-                fadeOutDuration: Duration.zero,
-                errorWidget: (_, __, ___) =>
-                    const ColoredBox(color: Colors.transparent),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.3),
+                    Colors.black.withValues(alpha: 0.8),
+                    Colors.black,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.4, 0.7],
+                ),
               ),
             ),
-          )
-        else
-          const Positioned.fill(child: ColoredBox(color: Colors.transparent)),
-
-        // ── LAYER 2: Dark / Gradient overlay — keeps foreground content readable ──────────
-        Positioned.fill(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: isFull
-                  ? const LinearGradient(
-                      colors: [
-                        Color.fromRGBO(0, 0, 0, 0.4),
-                        Color.fromRGBO(0, 0, 0, 0.6)
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    )
-                  : LinearGradient(
-                      colors: [
-                        Colors.black.withValues(alpha: 0.3),
-                        Colors.black.withValues(alpha: 0.8),
-                        Colors.black,
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0.0, 0.4, 0.7],
-                    ),
-            ),
           ),
-        ),
 
         // Stable Video + Metadata Column
         Column(
@@ -357,17 +357,52 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
     );
   }
 
+  void _handlePinchEnd() {
+    if (!_isPinching) return;
+    _isPinching = false;
+    if (!_isZoomedToFill && _pinchScale > 1.12) {
+      _setZoomedToFill(true);
+    } else if (_isZoomedToFill && _pinchScale < 0.88) {
+      _setZoomedToFill(false);
+    } else {
+      setState(() {
+        _pinchScale = 1.0;
+      });
+    }
+  }
+
+  void _setZoomedToFill(bool fill) {
+    if (_isZoomedToFill == fill) {
+      setState(() {
+        _pinchScale = 1.0;
+      });
+      return;
+    }
+    setState(() {
+      _isZoomedToFill = fill;
+      _pinchScale = 1.0;
+      _zoomToastText = fill ? 'Zoomed to fill' : 'Original';
+      _showZoomToast = true;
+    });
+    _zoomToastTimer?.cancel();
+    _zoomToastTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() {
+          _showZoomToast = false;
+        });
+      }
+    });
+  }
+
   Widget _buildVideoSection(Orientation orientation) {
     final size = MediaQuery.sizeOf(context);
     final controller = widget.controller;
 
     bool controllerIsHealthy = false;
-    bool isPlaying = false;
     bool hasVideoError = widget.hasControllerLoadError;
     try {
       if (controller != null) {
         controllerIsHealthy = controller.value.isInitialized;
-        isPlaying = controller.value.isPlaying;
         hasVideoError = hasVideoError || controller.value.hasError;
       }
     } catch (_) {
@@ -408,23 +443,29 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
             height: isFull ? size.height : size.width * (9 / 16),
             child: Stack(
               children: [
-                // 1. THUMBNAIL PLACEHOLDER (Visible until video starts)
-                // Wrapped in AspectRatio to prevent it from covering the blurred background on the sides in full-screen
-                Positioned.fill(
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: CachedNetworkImage(
-                        imageUrl: widget.video.thumbnailUrl,
-                        fit: BoxFit.cover,
-                        fadeInDuration: Duration.zero,
-                        fadeOutDuration: Duration.zero,
-                        errorWidget: (_, __, ___) =>
-                            const ColoredBox(color: Colors.black),
+                // 0. PURE BLACK BACKDROP (Prevents any bleeding/blur behind non-16:9 videos)
+                const Positioned.fill(
+                  child: ColoredBox(color: Colors.black),
+                ),
+
+                // 1. THUMBNAIL PLACEHOLDER (Only visible while video is loading/not ready)
+                // Hidden as soon as video controller is initialized and ready to render frames
+                if (!controllerIsHealthy)
+                  Positioned.fill(
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: CachedNetworkImage(
+                          imageUrl: widget.video.thumbnailUrl,
+                          fit: BoxFit.cover,
+                          fadeInDuration: Duration.zero,
+                          fadeOutDuration: Duration.zero,
+                          errorWidget: (_, __, ___) =>
+                              const ColoredBox(color: Colors.black),
+                        ),
                       ),
                     ),
                   ),
-                ),
 
                 // 1b. LOADING SHIMMER / ERROR STATE over the poster while the
                 // video is not ready. Uses the same shimmer treatment as
@@ -474,23 +515,30 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                   Positioned.fill(
                     child: Center(
                       child: ClipRect(
-                        child: Transform.translate(
-                          offset: _offset,
-                          child: Transform.scale(
-                            scale: _scale,
-                            child: FittedBox(
-                              fit: BoxFit.contain,
-                              child: SizedBox(
-                                width: controller!.value.size.width > 0
-                                    ? controller.value.size.width
-                                    : 16.0,
-                                height: controller.value.size.height > 0
-                                    ? controller.value.size.height
-                                    : 9.0,
-                                child: VideoPlayer(
-                                  controller,
-                                  key: ValueKey(controller),
-                                ),
+                        child: AnimatedScale(
+                          scale: _isPinching
+                              ? (_isZoomedToFill
+                                  ? _pinchScale.clamp(0.7, 1.4)
+                                  : _pinchScale.clamp(1.0, 1.5))
+                              : 1.0,
+                          duration: _isPinching
+                              ? Duration.zero
+                              : const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          child: FittedBox(
+                            fit: (isFull && _isZoomedToFill)
+                                ? BoxFit.cover
+                                : BoxFit.contain,
+                            child: SizedBox(
+                              width: controller!.value.size.width > 0
+                                  ? controller.value.size.width
+                                  : 16.0,
+                              height: controller.value.size.height > 0
+                                  ? controller.value.size.height
+                                  : 9.0,
+                              child: VideoPlayer(
+                                controller,
+                                key: ValueKey(controller),
                               ),
                             ),
                           ),
@@ -533,15 +581,11 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                     onPointerDown: (event) => _pointers++,
                     onPointerUp: (event) {
                       _pointers--;
+                      if (_isPinching && _pointers < 2) {
+                        _handlePinchEnd();
+                      }
                       if (_pointers <= 0) {
                         _pointers = 0;
-                        if (_isScaling) {
-                          setState(() {
-                            _isScaling = false;
-                            _scale = 1.0;
-                            _offset = Offset.zero;
-                          });
-                        }
                         if (_activeGesture == GestureType.horizontal) {
                           widget.onHorizontalDragEnd();
                         }
@@ -550,18 +594,13 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                         }
                         _activeGesture = GestureType.none;
                         _dragHorizontalDeltaAccumulated = 0;
-                        _dragVerticalDeltaAccumulated = 0;
                       }
                     },
                     onPointerCancel: (event) {
-                      _pointers = 0;
-                      if (_isScaling) {
-                        setState(() {
-                          _isScaling = false;
-                          _scale = 1.0;
-                          _offset = Offset.zero;
-                        });
+                      if (_isPinching) {
+                        _handlePinchEnd();
                       }
+                      _pointers = 0;
                       if (_activeGesture == GestureType.horizontal) {
                         widget.onHorizontalDragEnd();
                       }
@@ -570,60 +609,65 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                       }
                       _activeGesture = GestureType.none;
                       _dragHorizontalDeltaAccumulated = 0;
-                      _dragVerticalDeltaAccumulated = 0;
                     },
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: widget.onHandleTap,
                       onDoubleTapDown: widget.onDoubleTapToSeek,
                       onVerticalDragStart: (_) {
-                        _activeGesture = GestureType.vertical;
+                        if (_pointers < 2) {
+                          _activeGesture = GestureType.vertical;
+                        }
                       },
                       onVerticalDragUpdate: (details) {
-                        widget.onVerticalDragUpdate(
-                            details.delta.dy, details.localPosition);
+                        if (!_isPinching && _pointers < 2) {
+                          widget.onVerticalDragUpdate(
+                              details.delta.dy, details.localPosition);
+                        }
                       },
                       onVerticalDragEnd: (_) {
                         _activeGesture = GestureType.none;
                         widget.onVerticalDragEnd();
                       },
                       onScaleStart: (details) {
-                        if (_pointers >= 2) {
-                          _isScaling = true;
-                          _baseScale = _scale;
+                        if (_pointers >= 2 && isFull) {
+                          _isPinching = true;
+                          _pinchScale = 1.0;
                         }
                       },
                       onScaleUpdate: (details) {
-                        if (_isScaling) {
+                        if (_isPinching && isFull) {
                           setState(() {
-                            _scale =
-                                (_baseScale * details.scale).clamp(1.0, 4.0);
+                            _pinchScale = details.scale;
                           });
                           return;
                         }
 
-                        if (_activeGesture == GestureType.none) {
+                        if (_pointers < 2 &&
+                            _activeGesture == GestureType.none) {
                           _dragHorizontalDeltaAccumulated +=
                               details.focalPointDelta.dx;
-                          // Vertical is handled by onVerticalDragUpdate now
                           if (_dragHorizontalDeltaAccumulated.abs() >
                               _gestureThreshold) {
                             _activeGesture = GestureType.horizontal;
                           }
                         }
 
-                        if (_activeGesture == GestureType.horizontal) {
+                        if (_pointers < 2 &&
+                            _activeGesture == GestureType.horizontal) {
                           widget.onUnifiedHorizontalDrag(
                               details.focalPointDelta.dx);
                         }
                       },
                       onScaleEnd: (details) {
+                        if (_isPinching) {
+                          _handlePinchEnd();
+                        }
                         if (_activeGesture == GestureType.horizontal) {
                           widget.onHorizontalDragEnd();
                         }
                         _activeGesture = GestureType.none;
                         _dragHorizontalDeltaAccumulated = 0;
-                        _dragVerticalDeltaAccumulated = 0;
                       },
                     ),
                   ),
@@ -641,6 +685,56 @@ class _VayuFeedItemState extends ConsumerState<VayuFeedItem> {
                   ),
                   _buildBufferingIndicator(controller),
                 ],
+
+                // 3b. YOUTUBE-STYLE ZOOM STATUS TOAST PILL
+                if (_showZoomToast && isFull)
+                  Positioned(
+                    top: playerInsets.top + 16,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: IgnorePointer(
+                        child: AnimatedOpacity(
+                          opacity: _showZoomToast ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                width: 0.75,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _isZoomedToFill
+                                      ? Icons.zoom_out_map_rounded
+                                      : Icons.fit_screen_rounded,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _zoomToastText ?? '',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // 4. SECONDARY CONTROLS & PROGRESS BAR
                 if (controllerIsHealthy && widget.isCurrent)

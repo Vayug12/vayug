@@ -114,6 +114,23 @@ class AppInitializationManager {
       // Ensure Stage 1 (Firebase) completes quickly
       await stage1Future;
 
+      // **MANDATORY FORCE UPDATE CHECK**
+      try {
+        final versionCheck = await AppRemoteConfigService.instance
+            .checkAppVersion(refresh: true)
+            .timeout(const Duration(seconds: 4));
+        if (versionCheck.updateRequired) {
+          AppLogger.log(
+              '🚨 InitManager: Force update required (Current: ${versionCheck.currentVersion}, Min: ${versionCheck.minVersion})');
+          isUpdateRequired.value = true;
+          initializationStatus.value = 'Update Required';
+          _isStage2Complete = true;
+          return;
+        }
+      } catch (e) {
+        AppLogger.log('⚠️ InitManager: Version check error: $e');
+      }
+
       // Check if cold start was triggered by a deep link
       Uri? initialUri;
       try {

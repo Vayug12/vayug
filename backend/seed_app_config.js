@@ -19,8 +19,8 @@ const seedConfig = async () => {
       environment: 'production',
       isActive: true,
       versionControl: {
-        minSupportedAppVersion: '3.6.2',
-        latestAppVersion: '3.6.2',
+        minSupportedAppVersion: '3.6.4',
+        latestAppVersion: '3.6.4',
         forceUpdateMessage: 'Please update Vayug to the latest version to continue.',
         softUpdateMessage: 'A new update is available with better performance!',
         updateUrl: {

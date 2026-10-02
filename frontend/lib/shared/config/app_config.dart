@@ -30,8 +30,8 @@ class AppConfig {
   static const String _localWebBaseUrl = 'http://localhost:5001';
 
   // Primary production endpoints
-  static const String _customDomainUrl = 'https://api.snehayog.site';
   static const String _flyUrl = 'https://vayug.fly.dev';
+  static const String _customDomainUrl = 'https://vayug.fly.dev'; // Switched from expired api.snehayog.site
 
   // **NEW: Cloudflare Workers configuration**
   static const String _workerProductionUrl =
@@ -58,27 +58,25 @@ class AppConfig {
     if (_isDevelopment) {
       return kIsWeb ? _localWebBaseUrl : _localIpBaseUrl;
     } else {
-      // Production mode: Prioritize Custom Domain
-      return _cachedBaseUrl ?? _customDomainUrl; 
+      // Production mode: Primary Fly.io domain
+      return _cachedBaseUrl ?? _flyUrl; 
     }
   }
   
 
   // **Helper Methods for Production Priority & Fallback**
   
-  /// Asynchronous check that prioritizes Custom Domain -> Fly.io
+  /// Asynchronous check that prioritizes Fly.io
   static Future<String> getBaseUrlWithFallback() async {
     if (_isDevelopment) return baseUrl;
     
-    // Check if Custom Domain is healthy
-    final String? healthyCustom = await _checkServer(_customDomainUrl);
-    if (healthyCustom != null) {
-      _cachedBaseUrl = _customDomainUrl;
-      return _customDomainUrl;
+    // Check if Fly.io is healthy
+    final String? healthyFly = await _checkServer(_flyUrl);
+    if (healthyFly != null) {
+      _cachedBaseUrl = _flyUrl;
+      return _flyUrl;
     }
     
-    // Otherwise fallback to Fly.io
-    print('⚠️ AppConfig: Custom domain unreachable, falling back to Fly.io');
     _cachedBaseUrl = _flyUrl;
     return _flyUrl;
   }

@@ -723,6 +723,16 @@ class VideoCacheProxyService {
       }
     }
 
+    // **FALLBACK CDN REWRITE: Route cdn.snehayog.site / vayug-edge to active domain vayugai.com**
+    if (targetUrl.contains('cdn.snehayog.site') || targetUrl.contains('vayug-edge.factshorts1.workers.dev')) {
+      targetUrl = targetUrl
+          .replaceFirst('https://cdn.snehayog.site', 'https://vayugai.com')
+          .replaceFirst('http://cdn.snehayog.site', 'https://vayugai.com')
+          .replaceFirst('https://vayug-edge.factshorts1.workers.dev', 'https://vayugai.com')
+          .replaceFirst('http://vayug-edge.factshorts1.workers.dev', 'https://vayugai.com');
+      AppLogger.log('🔄 ProxyService: Rewrote CDN URL to https://vayugai.com');
+    }
+
     // Don't proxy if already proxied or local
     if (targetUrl.contains('127.0.0.1:$_port') ||
         targetUrl.contains('localhost:$_port') ||

@@ -165,87 +165,88 @@ class _SplashScreenState extends State<SplashScreen>
               // Stop the progress animation
               _progressController.stop();
 
-              return Container(
-                color: AppColors.backgroundPrimary.withValues(alpha: 0.8),
-                child: Center(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppColors.backgroundSecondary,
-                      borderRadius: AppRadius.borderRadiusLG,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.system_update,
-                          color: AppColors.primary,
-                          size: 48,
-                        ),
-                        AppSpacing.vSpace16,
-                        Text(
-                          'Update Required',
-                          style: AppTypography.headlineMedium.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: AppTypography.weightBold,
+              return PopScope(
+                canPop: false,
+                child: Container(
+                  color: AppColors.backgroundPrimary.withValues(alpha: 0.95),
+                  child: Center(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.backgroundSecondary,
+                        borderRadius: AppRadius.borderRadiusLG,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        AppSpacing.vSpace12,
-                        Text(
-                          'A new version of Vayu is required to continue. Please update the app to access the latest features and improvements.',
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.5,
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.system_update,
+                            color: AppColors.primary,
+                            size: 48,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        AppSpacing.vSpace24,
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              // Replace with your actual Play Store URL or App ID
-                              final url =
-                                  Uri.parse('market://details?id=com.vayu.app');
-                              final fallbackUrl = Uri.parse(
-                                  'https://play.google.com/store/apps/details?id=com.vayu.app');
+                          AppSpacing.vSpace16,
+                          Text(
+                            'Update Required',
+                            style: AppTypography.headlineMedium.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: AppTypography.weightBold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          AppSpacing.vSpace12,
+                          Text(
+                            'A new version of Vayug is required to continue. Please update the app from Google Play Store.',
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          AppSpacing.vSpace24,
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                final url = Uri.parse('market://details?id=com.snehayog.app');
+                                final fallbackUrl = Uri.parse(
+                                    'https://play.google.com/store/apps/details?id=com.snehayog.app');
 
-                              if (await canLaunchUrl(url)) {
-                                await launchUrl(url);
-                              } else {
-                                await launchUrl(fallbackUrl,
-                                    mode: LaunchMode.externalApplication);
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: AppRadius.borderRadiusMD,
+                                if (await canLaunchUrl(url)) {
+                                  await launchUrl(url);
+                                } else {
+                                  await launchUrl(fallbackUrl,
+                                      mode: LaunchMode.externalApplication);
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: AppRadius.borderRadiusMD,
+                                ),
+                                elevation: 0,
                               ),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              'UPDATE NOW',
-                              style: AppTypography.labelLarge.copyWith(
-                                color: Colors.white,
-                                fontWeight: AppTypography.weightBold,
-                                letterSpacing: 1,
+                              child: Text(
+                                'UPDATE NOW',
+                                style: AppTypography.labelLarge.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: AppTypography.weightBold,
+                                  letterSpacing: 1,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

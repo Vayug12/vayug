@@ -417,7 +417,11 @@ class VideoService implements IVideoService {
       final res = await httpClientService
           .post(
             Uri.parse('${NetworkHelper.apiBaseUrl}/videos/$videoId/like'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null && token.toString().isNotEmpty)
+                'Authorization': 'Bearer $token',
+            },
             body: json.encode({}),
             timeout: const Duration(seconds: 15),
           );

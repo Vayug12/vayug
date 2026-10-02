@@ -9,6 +9,7 @@ import 'package:vayug/shared/utils/format_utils.dart';
 class VayuMetadataSection extends StatelessWidget {
   final VideoModel video;
   final bool isPortrait;
+  final VoidCallback onLike;
   final VoidCallback onShare;
   final VoidCallback onSave;
   final VoidCallback? onComments;
@@ -22,6 +23,7 @@ class VayuMetadataSection extends StatelessWidget {
     super.key,
     required this.video,
     this.isPortrait = true,
+    required this.onLike,
     required this.onShare,
     required this.onSave,
     this.onComments,
@@ -85,6 +87,24 @@ class VayuMetadataSection extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                _buildActionButton(
+                  context,
+                  icon: Icon(
+                    video.isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: video.isLiked
+                        ? AppColors.error
+                        : (isDark ? Colors.white70 : Colors.black87),
+                    size: 18,
+                  ),
+                  onPressed: onLike,
+                  label: video.likes > 0
+                      ? FormatUtils.formatViews(video.likes)
+                      : 'Like',
+                  labelColor: video.isLiked ? AppColors.error : null,
+                ),
+                SizedBox(width: AppSpacing.spacing2),
                 _buildActionButton(
                   context,
                   icon: Icon(

@@ -1,5 +1,6 @@
 import 'package:vayug/shared/widgets/links_bottom_sheet.dart';
 import 'package:vayug/shared/utils/url_utils.dart';
+import 'package:vayug/shared/config/app_config.dart';
 
 class VideoLink {
   final String url;
@@ -331,6 +332,23 @@ class VideoModel {
         }
       }();
 
+      String resolveMediaUrl(dynamic raw) {
+        if (raw == null) return '';
+        final str = raw.toString().trim();
+        if (str.isEmpty) return '';
+        if (str.contains('cdn.snehayog.site') || str.contains('vayug-edge.factshorts1.workers.dev')) {
+          return str.replaceFirst('https://cdn.snehayog.site', 'https://vayugai.com')
+                    .replaceFirst('http://cdn.snehayog.site', 'https://vayugai.com')
+                    .replaceFirst('https://vayug-edge.factshorts1.workers.dev', 'https://vayugai.com')
+                    .replaceFirst('http://vayug-edge.factshorts1.workers.dev', 'https://vayugai.com');
+        }
+        if (str.contains('api.snehayog.site')) {
+          return str.replaceFirst('https://api.snehayog.site', AppConfig.baseUrl)
+                    .replaceFirst('http://api.snehayog.site', AppConfig.baseUrl);
+        }
+        return str;
+      }
+
       return VideoModel(
         id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
         videoName: () {
@@ -338,8 +356,8 @@ class VideoModel {
           final name = nameValue != null ? nameValue.toString().trim() : '';
           return name.isEmpty ? 'Untitled Video' : name;
         }(),
-        videoUrl: json['videoUrl']?.toString() ?? '',
-        thumbnailUrl: json['thumbnailUrl']?.toString() ?? '',
+        videoUrl: resolveMediaUrl(json['videoUrl']),
+        thumbnailUrl: resolveMediaUrl(json['thumbnailUrl']),
         likes: (json['likes'] is int)
             ? json['likes']
             : int.tryParse(json['likes']?.toString() ?? '0') ?? 0,
@@ -519,8 +537,8 @@ class VideoModel {
             ? json['earnings'].toDouble()
             : double.tryParse(json['earnings']?.toString() ?? '0.0') ?? 0.0,
         // Parse HLS streaming fields
-        hlsMasterPlaylistUrl: json['hlsMasterPlaylistUrl']?.toString(),
-        hlsPlaylistUrl: json['hlsPlaylistUrl']?.toString(),
+        hlsMasterPlaylistUrl: resolveMediaUrl(json['hlsMasterPlaylistUrl']),
+        hlsPlaylistUrl: resolveMediaUrl(json['hlsPlaylistUrl']),
         hlsVariants: () {
           try {
             if (json['hlsVariants'] == null) {
@@ -551,7 +569,7 @@ class VideoModel {
           }
         }(),
         isHLSEncoded: json['isHLSEncoded'] == true,
-        lowQualityUrl: json['lowQualityUrl']?.toString(), // 480p URL
+        lowQualityUrl: resolveMediaUrl(json['lowQualityUrl']), // 480p URL
         // Parse processing status fields
         processingStatus: json['processingStatus']?.toString() ?? 'completed',
         processingProgress: (json['processingProgress'] is int)
